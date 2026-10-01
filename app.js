@@ -854,46 +854,41 @@ $("revealBtn")?.addEventListener(
 
 
       // --------------------------------------------
-      // WINNAAR
+      // TOP 3 BEPALEN
       // --------------------------------------------
 
-      for (
-        const entry of entries
-      ) {
+const rankedEntries =
+  entries
+    .map(entry => {
 
-        const diff =
-          Math.abs(
-            Number(
-              entry.guess
-            )
-            -
-            code
-          );
+      const guess =
+        Number(entry.guess);
+
+      const diff =
+        Math.abs(
+          guess - code
+        );
+
+      return {
+        name: entry.name,
+        guess: guess,
+        diff: diff
+      };
+
+    })
+    .sort(
+      (a, b) => a.diff - b.diff
+    );
 
 
-        if (
-          !winner ||
-          diff < winner.diff
-        ) {
+// Eerste deelnemer is de winnaar
+winner =
+  rankedEntries[0];
 
-          winner = {
 
-            name:
-              entry.name,
-
-            guess:
-              Number(
-                entry.guess
-              ),
-
-            diff:
-              diff
-
-          };
-
-        }
-
-      }
+// De beste drie
+const top3 =
+  rankedEntries.slice(0, 3);
 
 
       // --------------------------------------------
