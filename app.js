@@ -1243,7 +1243,6 @@ function startDisplayTimer(
 
 }
 
-
 // ==================================================
 // INZENDINGEN
 // ==================================================
@@ -1252,73 +1251,73 @@ onValue(
   entriesRef,
   snapshot => {
 
+    if (!isDisplay) {
+      return;
+    }
+
     const data =
       snapshot.val() || {};
 
-
+    // We gebruiken Object.entries zodat iedere
+    // Firebase-inzending zijn eigen unieke key behoudt.
     const entries =
-      Object.values(data);
+      Object.entries(data)
+        .map(([id, entry]) => ({
+          id,
+          ...entry
+        }))
+        .filter(
+          entry =>
+            entry.roundId ===
+            currentGame?.roundId
+        );
 
 
-    if (
-      !isDisplay
-    ) {
-
-      return;
-
-    }
-
-
-    // Alleen huidige ronde
-    const currentEntries =
-      entries.filter(
-        entry =>
-          entry.roundId ===
-          currentGame?.roundId
-      );
-
-
-    $("entriesCount")
-      .textContent =
-      `${currentEntries.length} deelnemer${
-        currentEntries.length === 1
+    // AANTAL DEELNEMERS
+    $("entriesCount").textContent =
+      `${entries.length} deelnemer${
+        entries.length === 1
           ? ""
           : "s"
       } hebben meegedaan`;
 
 
-    $("entries")
-      .innerHTML =
-      currentEntries
+    // OVERZICHT
+    $("entries").innerHTML =
+      entries
         .map(
-          entry => `
+          entry => {
 
-            <div class="entry">
+            const guess =
+              String(
+                entry.guess
+              ).padStart(
+                6,
+                "0"
+              );
 
-              ${escapeHtml(
-                entry.name
-              )}
+            return `
+              <div class="entry">
 
-              —
-
-              <b>
-                ${String(
-                  entry.guess
-                ).padStart(
-                  6,
-                  "0"
+                ${escapeHtml(
+                  entry.name
                 )}
-              </b>
 
-            </div>
+                —
 
-          `
+                <b>
+                  ${guess}
+                </b>
+
+              </div>
+            `;
+
+          }
         )
         .join("");
 
   }
 );
-
 
 // ==================================================
 // HTML VEILIG MAKEN
