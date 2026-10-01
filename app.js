@@ -129,8 +129,28 @@ function renderParticipant(game) {
     return;
   }
 
-  show("join");
+  // Nieuwe ronde is gestart:
+  // oude status/meldingen verwijderen
+  hide("closedMessage");
   hide("waiting");
+
+  // Naam behouden
+  // Code leegmaken
+  if ($("guess")) {
+    $("guess").value = "";
+  }
+
+  // Knop weer beschikbaar maken
+  if ($("joinBtn")) {
+    $("joinBtn").disabled = false;
+  }
+
+  // Melding leegmaken
+  if ($("joinMsg")) {
+    $("joinMsg").textContent = "";
+  }
+
+  show("join");
 
   startParticipantTimer(endTime);
 }
