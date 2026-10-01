@@ -1,11 +1,13 @@
-// Vul hier de Firebase-config van jouw project in.
-// Zie README.md voor de stappen.
-export const firebaseConfig = {
-  apiKey: "VUL_HIER_IN",
-  authDomain: "VUL_HIER_IN",
-  databaseURL: "VUL_HIER_IN",
-  projectId: "VUL_HIER_IN",
-  storageBucket: "VUL_HIER_IN",
-  messagingSenderId: "VUL_HIER_IN",
-  appId: "VUL_HIER_IN"
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC_S7pkStwAodV5INSkUa_yl6rhlBK_-ao",
+  authDomain: "raad-de-2fa.firebaseapp.com",
+  databaseURL: "https://raad-de-2fa-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "raad-de-2fa",
+  storageBucket: "raad-de-2fa.firebasestorage.app",
+  messagingSenderId: "314703633235",
+  appId: "1:314703633235:web:49890c56eed9bfd9181fa6"
 };
+
+export { firebaseConfig };
