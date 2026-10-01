@@ -5,8 +5,7 @@ import {
   set,
   push,
   onValue,
-  remove,
-  serverTimestamp
+  remove
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
 
 import {
@@ -39,7 +38,7 @@ function hide(id) {
 }
 
 // --------------------------------------------------
-// PAGINA TYPE
+// PAGINA
 // --------------------------------------------------
 
 if (isDisplay) {
@@ -47,21 +46,19 @@ if (isDisplay) {
   hide("waiting");
   hide("admin");
   show("display");
-}
-else if (isAdmin) {
+} else if (isAdmin) {
   hide("join");
   hide("waiting");
   hide("display");
   show("admin");
-}
-else {
+} else {
   hide("display");
   hide("admin");
   show("join");
 }
 
 // --------------------------------------------------
-// FIREBASE AUTH
+// AUTH
 // --------------------------------------------------
 
 let currentUid = null;
@@ -89,7 +86,9 @@ let currentGame = null;
 let timerHandle = null;
 
 onValue(gameRef, snapshot => {
+
   const game = snapshot.val() || {};
+
   currentGame = game;
 
   if (isDisplay) {
@@ -107,35 +106,35 @@ onValue(gameRef, snapshot => {
 
 function renderParticipant(game) {
 
-  if (!game.status) {
+  if (!game || game.status !== "open") {
+    closeParticipantForm();
     return;
   }
 
-  if (game.status === "open") {
+  const startedAt = Number(game.startedAt);
+  const duration = Number(game.duration);
 
-    const endTime =
-      Number(game.startedAt) +
-      Number(game.duration) * 1000;
-
-    const remaining =
-      endTime - Date.now();
-
-    if (remaining <= 0) {
-      closeParticipantForm();
-      return;
-    }
-
-    show("join");
-    hide("waiting");
-
-    startParticipantTimer(endTime);
-
-  } else {
-
-    // Ronde is niet open
-    closeParticipantForm();
+  if (
+    !Number.isFinite(startedAt) ||
+    !Number.isFinite(duration)
+  ) {
+    return;
   }
+
+  const endTime =
+    startedAt + duration * 1000;
+
+  if (Date.now() >= endTime) {
+    closeParticipantForm();
+    return;
+  }
+
+  show("join");
+  hide("waiting");
+
+  startParticipantTimer(endTime);
 }
+
 
 function startParticipantTimer(endTime) {
 
@@ -149,23 +148,25 @@ function startParticipantTimer(endTime) {
     const seconds =
       Math.ceil(remaining / 1000);
 
-    const message = $("joinMsg");
-
-    if (message) {
-      message.textContent =
+    if ($("joinMsg")) {
+      $("joinMsg").textContent =
         `Nog ${seconds} seconden om mee te doen.`;
     }
 
     if (remaining <= 0) {
+
       clearInterval(timerHandle);
+
       closeParticipantForm();
     }
   };
 
   update();
 
-  timerHandle = setInterval(update, 200);
+  timerHandle =
+    setInterval(update, 200);
 }
+
 
 function closeParticipantForm() {
 
@@ -174,12 +175,13 @@ function closeParticipantForm() {
   hide("join");
   hide("waiting");
 
-  // Maak een aparte melding zichtbaar
-  let closed = document.getElementById("closedMessage");
+  let closed =
+    document.getElementById("closedMessage");
 
   if (!closed) {
 
-    closed = document.createElement("section");
+    closed =
+      document.createElement("section");
 
     closed.id = "closedMessage";
     closed.className = "card";
@@ -195,126 +197,146 @@ function closeParticipantForm() {
       </p>
     `;
 
-    document.getElementById("app").appendChild(closed);
+    document
+      .getElementById("app")
+      .appendChild(closed);
   }
 
   show("closedMessage");
 }
 
-
 // --------------------------------------------------
 // MEEDOEN
 // --------------------------------------------------
 
-$("joinBtn")?.addEventListener("click", async () => {
+$("joinBtn")?.addEventListener(
+  "click",
+  async () => {
 
-  const name =
-    $("name").value.trim();
+    const name =
+      $("name").value.trim();
 
-  const guess =
-    $("guess").value.trim();
+    const guess =
+      $("guess").value.trim();
 
-  if (!name) {
-    $("joinMsg").textContent =
-      "Vul je naam in.";
-    return;
-  }
-
-  if (!/^\d{6}$/.test(guess)) {
-    $("joinMsg").textContent =
-      "Vul precies 6 cijfers in.";
-    return;
-  }
-
-  $("joinBtn").disabled = true;
-  $("joinMsg").textContent =
-    "Inzending controleren...";
-
-  try {
-
-    // Eerst lokaal controleren
-    const gameSnapshot =
-      await new Promise(resolve =>
-        onValue(
-          gameRef,
-          resolve,
-          { onlyOnce: true }
-        )
-      );
-
-    const game =
-      gameSnapshot.val();
-
-    if (!game ||
-        game.status !== "open") {
-
-      throw new Error(
-        "ROUND_CLOSED"
-      );
-    }
-
-    const endTime =
-      Number(game.startedAt) +
-      Number(game.duration) * 1000;
-
-    if (Date.now() >= endTime) {
-
-      throw new Error(
-        "ROUND_CLOSED"
-      );
-    }
-
-    // Inzending opslaan
-    const item =
-      push(entriesRef);
-
-    await set(item, {
-
-      name: name,
-
-      guess: Number(guess),
-
-      createdAt: serverTimestamp()
-
-    });
-
-    hide("join");
-
-    $("savedGuess").textContent =
-      `${name}, jouw gok is ${guess}.`;
-
-    hide("closedMessage");
-    show("waiting");
-
-  }
-  catch (error) {
-
-    console.error(
-      "Inzending mislukt:",
-      error
-    );
-
-    $("joinBtn").disabled = false;
-
-    if (
-      error.message ===
-      "ROUND_CLOSED"
-    ) {
-
-      closeParticipantForm();
-
-    } else {
-
+    if (!name) {
       $("joinMsg").textContent =
-        "De inschrijving is gesloten of er ging iets mis.";
+        "Vul je naam in.";
+      return;
+    }
+
+    if (!/^\d{6}$/.test(guess)) {
+      $("joinMsg").textContent =
+        "Vul precies 6 cijfers in.";
+      return;
+    }
+
+    $("joinBtn").disabled = true;
+
+    $("joinMsg").textContent =
+      "Inzending controleren...";
+
+    try {
+
+      // Huidige spelstatus ophalen
+      const snapshot =
+        await new Promise(resolve =>
+          onValue(
+            gameRef,
+            resolve,
+            { onlyOnce: true }
+          )
+        );
+
+      const game =
+        snapshot.val();
+
+      if (!game ||
+          game.status !== "open") {
+
+        throw new Error(
+          "ROUND_CLOSED"
+        );
+      }
+
+      const startedAt =
+        Number(game.startedAt);
+
+      const duration =
+        Number(game.duration);
+
+      if (
+        !Number.isFinite(startedAt) ||
+        !Number.isFinite(duration)
+      ) {
+
+        throw new Error(
+          "INVALID_GAME"
+        );
+      }
+
+      const endTime =
+        startedAt + duration * 1000;
+
+      if (Date.now() >= endTime) {
+
+        throw new Error(
+          "ROUND_CLOSED"
+        );
+      }
+
+      // Inzending maken
+      const item =
+        push(entriesRef);
+
+      await set(item, {
+
+        name: name,
+
+        guess: Number(guess),
+
+        createdAt: Date.now()
+
+      });
+
+      hide("join");
+
+      hide("closedMessage");
+
+      $("savedGuess").textContent =
+        `${name}, jouw gok is ${guess}.`;
+
+      show("waiting");
 
     }
-  }
-});
+    catch (error) {
 
+      console.error(
+        "Inzending mislukt:",
+        error
+      );
+
+      $("joinBtn").disabled = false;
+
+      if (
+        error.message ===
+        "ROUND_CLOSED"
+      ) {
+
+        closeParticipantForm();
+
+      } else {
+
+        $("joinMsg").textContent =
+          "Er ging iets mis bij het versturen. Probeer opnieuw.";
+
+      }
+    }
+  }
+);
 
 // --------------------------------------------------
-// ADMIN: RONDE STARTEN
+// ADMIN: START
 // --------------------------------------------------
 
 $("startBtn")?.addEventListener(
@@ -332,18 +354,20 @@ $("startBtn")?.addEventListener(
 
     try {
 
-      // Eerst oude inzendingen verwijderen
+      // Oude inzendingen verwijderen
       await remove(entriesRef);
 
-      // startedAt wordt door Firebase
-      // zelf bepaald met de serverklok
+      // Normale milliseconde-tijd opslaan
+      const startedAt =
+        Date.now();
+
       await set(gameRef, {
 
         status: "open",
 
         duration: duration,
 
-        startedAt: serverTimestamp()
+        startedAt: startedAt
 
       });
 
@@ -362,9 +386,8 @@ $("startBtn")?.addEventListener(
   }
 );
 
-
 // --------------------------------------------------
-// ADMIN: CODE + WINNAAR
+// ADMIN: WINNAAR
 // --------------------------------------------------
 
 $("revealBtn")?.addEventListener(
@@ -396,7 +419,6 @@ $("revealBtn")?.addEventListener(
         return;
       }
 
-      // 000000 t/m 999999
       const code =
         Math.floor(
           Math.random() * 1000000
@@ -422,9 +444,7 @@ $("revealBtn")?.addEventListener(
             guess: Number(entry.guess),
             diff: diff
           };
-
         }
-
       }
 
       await set(gameRef, {
@@ -451,7 +471,6 @@ $("revealBtn")?.addEventListener(
     }
   }
 );
-
 
 // --------------------------------------------------
 // ADMIN: NIEUWE RONDE
@@ -489,22 +508,33 @@ $("resetBtn")?.addEventListener(
   }
 );
 
-
 // --------------------------------------------------
 // GROOT SCHERM
 // --------------------------------------------------
 
 function renderDisplay(game) {
 
-  if (!game.status) {
+  if (!game || !game.status) {
     return;
   }
 
   if (game.status === "open") {
 
+    const startedAt =
+      Number(game.startedAt);
+
+    const duration =
+      Number(game.duration);
+
+    if (
+      !Number.isFinite(startedAt) ||
+      !Number.isFinite(duration)
+    ) {
+      return;
+    }
+
     const endTime =
-      Number(game.startedAt) +
-      Number(game.duration) * 1000;
+      startedAt + duration * 1000;
 
     $("displayText").textContent =
       "Vul je gok in op je telefoon!";
@@ -515,9 +545,7 @@ function renderDisplay(game) {
 
   }
 
-  else if (
-    game.status === "revealed"
-  ) {
+  else if (game.status === "revealed") {
 
     clearInterval(timerHandle);
 
@@ -587,11 +615,7 @@ function startDisplayTimer(endTime) {
       $("displayText").textContent =
         "🔒 INSCHRIJVING GESLOTEN";
 
-      $("timer").textContent =
-        "0";
-
     }
-
   };
 
   tick();
@@ -600,9 +624,8 @@ function startDisplayTimer(endTime) {
     setInterval(tick, 200);
 }
 
-
 // --------------------------------------------------
-// INZENDINGEN OP GROOT SCHERM
+// INZENDINGEN
 // --------------------------------------------------
 
 onValue(entriesRef, snapshot => {
@@ -613,30 +636,27 @@ onValue(entriesRef, snapshot => {
   const entries =
     Object.values(data);
 
-  if (isDisplay) {
-
-    $("entriesCount").textContent =
-      `${entries.length} deelnemer${
-        entries.length === 1 ? "" : "s"
-      } hebben meegedaan`;
-
-    $("entries").innerHTML =
-      entries
-        .map(entry => `
-          <div class="entry">
-            ${escapeHtml(entry.name)}
-            —
-            <b>
-              ${String(entry.guess).padStart(6, "0")}
-            </b>
-          </div>
-        `)
-        .join("");
-
+  if (!isDisplay) {
+    return;
   }
 
-});
+  $("entriesCount").textContent =
+    `${entries.length} deelnemer${
+      entries.length === 1 ? "" : "s"
+    } hebben meegedaan`;
 
+  $("entries").innerHTML =
+    entries.map(entry => `
+      <div class="entry">
+        ${escapeHtml(entry.name)}
+        —
+        <b>
+          ${String(entry.guess).padStart(6, "0")}
+        </b>
+      </div>
+    `).join("");
+
+});
 
 // --------------------------------------------------
 // HTML VEILIG MAKEN
@@ -654,9 +674,7 @@ function escapeHtml(value) {
       "'": "&#039;"
     }[char])
   );
-
 }
-
 
 // --------------------------------------------------
 // CONFETTI
@@ -664,11 +682,7 @@ function escapeHtml(value) {
 
 function confetti() {
 
-  for (
-    let i = 0;
-    i < 90;
-    i++
-  ) {
+  for (let i = 0; i < 90; i++) {
 
     const el =
       document.createElement("div");
