@@ -1,3 +1,6 @@
+// RAAD DE 2FA — app.js v3
+// Robuuste Top 3-weergave met fallback voor oudere Firebase-data.
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 
 import {
@@ -161,6 +164,9 @@ let currentGame =
 
 let timerHandle =
   null;
+
+let latestEntries =
+  [];
 
 
 // ==================================================
@@ -1309,9 +1315,91 @@ function renderDisplay(
     // TOP 3
     // ----------------------------------------------
 
+    let top3 =
+      Array.isArray(game.top3)
+        ? game.top3
+        : [];
+
+    // Als de Firebase-ronde nog geen top3 bevat,
+    // berekenen we hem hier alsnog uit de inzendingen.
     if (
-      game.top3 &&
-      game.top3.length
+      top3.length === 0 &&
+      game.code !== undefined &&
+      latestEntries.length > 0
+    ) {
+
+      top3 =
+        latestEntries
+          .filter(
+            entry =>
+              entry.roundId ===
+              game.roundId
+          )
+          .map(
+            entry => {
+
+              const guess =
+                Number(
+                  entry.guess
+                );
+
+              return {
+                id:
+                  entry.id,
+
+                name:
+                  entry.name,
+
+                guess:
+                  guess,
+
+                diff:
+                  Math.abs(
+                    guess -
+                    Number(game.code)
+                  ),
+
+                createdAt:
+                  Number(
+                    entry.createdAt
+                  ) || 0
+
+              };
+
+            }
+          )
+          .sort(
+            (a, b) => {
+
+              if (
+                a.diff !==
+                b.diff
+              ) {
+
+                return (
+                  a.diff -
+                  b.diff
+                );
+
+              }
+
+              return (
+                a.createdAt -
+                b.createdAt
+              );
+
+            }
+          )
+          .slice(
+            0,
+            3
+          );
+
+    }
+
+
+    if (
+      top3.length > 0
     ) {
 
       const medals = [
@@ -1320,109 +1408,131 @@ function renderDisplay(
         "🥉"
       ];
 
-
-      const places = [
-        "GOUD",
-        "ZILVER",
-        "BRONS"
+      const placeNames = [
+        "1e PLAATS — GOUD",
+        "2e PLAATS — ZILVER",
+        "3e PLAATS — BRONS"
       ];
 
+      $("result").innerHTML = `
 
-      $("result")
-        .innerHTML = `
+        <div
+          class="winner-title"
+          style="
+            font-size:clamp(2rem,4vw,4rem);
+            font-weight:900;
+            margin-bottom:24px;
+          "
+        >
+          🎉 ${escapeHtml(
+            top3[0].name
+          )} WINT! 🎉
+        </div>
 
-          <div class="winner-title">
+        <div
+          style="
+            display:flex;
+            justify-content:center;
+            align-items:flex-end;
+            gap:18px;
+            flex-wrap:wrap;
+            width:100%;
+            max-width:1100px;
+            margin:0 auto;
+          "
+        >
 
-            🎉
-            ${escapeHtml(
-              game.top3[0].name
-            )}
-            WINT!
-            🎉
+          ${top3
+            .map(
+              (entry, index) => `
 
-          </div>
-
-
-          <div class="podium">
-
-            ${game.top3
-              .map(
-                (
-                  entry,
-                  index
-                ) => `
+                <div
+                  style="
+                    background:rgba(255,255,255,.10);
+                    border:2px solid rgba(255,255,255,.20);
+                    border-radius:22px;
+                    padding:20px 24px;
+                    min-width:220px;
+                    flex:1 1 220px;
+                    max-width:320px;
+                    box-sizing:border-box;
+                    text-align:center;
+                  "
+                >
 
                   <div
-                    class="podium-place"
+                    style="
+                      font-size:clamp(2.5rem,5vw,4.5rem);
+                      line-height:1;
+                      margin-bottom:8px;
+                    "
                   >
-
-                    <div
-                      class="medal"
-                    >
-                      ${
-                        medals[index]
-                      }
-                    </div>
-
-
-                    <div
-                      class="place"
-                    >
-                      ${
-                        places[index]
-                      }
-                    </div>
-
-
-                    <div
-                      class="player-name"
-                    >
-                      ${
-                        escapeHtml(
-                          entry.name
-                        )
-                      }
-                    </div>
-
-
-                    <div
-                      class="player-guess"
-                    >
-                      ${
-                        String(
-                          entry.guess
-                        ).padStart(
-                          6,
-                          "0"
-                        )
-                      }
-                    </div>
-
-
-                    <div
-                      class="difference"
-                    >
-                      Verschil:
-                      ${
-                        entry.diff
-                      }
-                    </div>
-
+                    ${medals[index]}
                   </div>
 
-                `
-              )
-              .join("")}
+                  <div
+                    style="
+                      font-size:clamp(1.1rem,2vw,1.6rem);
+                      font-weight:900;
+                      margin-bottom:10px;
+                    "
+                  >
+                    ${placeNames[index]}
+                  </div>
 
-          </div>
+                  <div
+                    style="
+                      font-size:clamp(1.4rem,3vw,2.3rem);
+                      font-weight:900;
+                      margin-bottom:8px;
+                    "
+                  >
+                    ${escapeHtml(
+                      entry.name
+                    )}
+                  </div>
 
-        `;
+                  <div
+                    style="
+                      font-size:clamp(1.2rem,2.5vw,2rem);
+                      font-weight:800;
+                      letter-spacing:2px;
+                      margin-bottom:8px;
+                    "
+                  >
+                    ${String(
+                      entry.guess
+                    ).padStart(
+                      6,
+                      "0"
+                    )}
+                  </div>
 
+                  <div
+                    style="
+                      font-size:1.1rem;
+                      opacity:.85;
+                    "
+                  >
+                    Verschil:
+                    <strong>
+                      ${entry.diff}
+                    </strong>
+                  </div>
+
+                </div>
+
+              `
+            )
+            .join("")}
+
+        </div>
+
+      `;
 
       confetti();
 
     }
-
 
     // ----------------------------------------------
     // OUDE WINNAAR-DATA
@@ -1604,6 +1714,9 @@ onValue(
         })
       );
 
+    latestEntries =
+      entries;
+
 
     // Alleen huidige ronde
     const currentEntries =
@@ -1661,6 +1774,15 @@ onValue(
           `
         )
         .join("");
+
+    if (
+      isDisplay &&
+      currentGame?.status === "revealed"
+    ) {
+      renderDisplay(
+        currentGame
+      );
+    }
 
   }
 );
