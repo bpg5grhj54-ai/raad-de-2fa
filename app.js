@@ -1,4 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+
 import {
   getDatabase,
   ref,
@@ -22,15 +23,24 @@ import { firebaseConfig } from "./firebase-config.js";
 // ==================================================
 
 const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const auth = getAuth(app);
 
-const gameRef = ref(db, "game");
-const entriesRef = ref(db, "entries");
+const db =
+  getDatabase(app);
 
-const $ = id => document.getElementById(id);
+const auth =
+  getAuth(app);
 
-const params = new URLSearchParams(location.search);
+const gameRef =
+  ref(db, "game");
+
+const entriesRef =
+  ref(db, "entries");
+
+const $ =
+  id => document.getElementById(id);
+
+const params =
+  new URLSearchParams(location.search);
 
 const isDisplay =
   params.get("screen") === "display";
@@ -44,12 +54,22 @@ const isAdmin =
 // ==================================================
 
 function show(id) {
-  $(id)?.classList.remove("hidden");
+
+  $(id)?.classList.remove(
+    "hidden"
+  );
+
 }
 
+
 function hide(id) {
-  $(id)?.classList.add("hidden");
+
+  $(id)?.classList.add(
+    "hidden"
+  );
+
 }
+
 
 if (isDisplay) {
 
@@ -60,6 +80,7 @@ if (isDisplay) {
   show("display");
 
 }
+
 else if (isAdmin) {
 
   hide("join");
@@ -69,6 +90,7 @@ else if (isAdmin) {
   show("admin");
 
 }
+
 else {
 
   hide("display");
@@ -83,86 +105,118 @@ else {
 // AUTHENTICATIE
 // ==================================================
 
-let currentUid = null;
+let currentUid =
+  null;
 
-onAuthStateChanged(auth, user => {
 
-  if (!user) return;
+onAuthStateChanged(
+  auth,
+  user => {
 
-  currentUid = user.uid;
+    if (!user) return;
 
-  if (isAdmin && $("adminUid")) {
+    currentUid =
+      user.uid;
 
-    $("adminUid").textContent =
-      "Jouw admin-ID: " + currentUid;
+    if (
+      isAdmin &&
+      $("adminUid")
+    ) {
+
+      $("adminUid")
+        .textContent =
+        "Jouw admin-ID: " +
+        currentUid;
+
+    }
 
   }
+);
 
-});
 
-signInAnonymously(auth)
-  .catch(error => {
+signInAnonymously(
+  auth
+)
+.catch(
+  error => {
 
     console.error(
       "Firebase login fout:",
       error
     );
 
-  });
+  }
+);
 
 
 // ==================================================
 // LOKALE RONDE-INFORMATIE
 // ==================================================
 
-let currentRoundId = null;
+let currentRoundId =
+  null;
 
-let currentGame = null;
+let currentGame =
+  null;
 
-let timerHandle = null;
+let timerHandle =
+  null;
 
 
 // ==================================================
 // GAME STATUS VOLGEN
 // ==================================================
 
-onValue(gameRef, snapshot => {
+onValue(
+  gameRef,
+  snapshot => {
 
-  const game =
-    snapshot.val() || {};
+    const game =
+      snapshot.val() || {};
 
-  currentGame = game;
+    currentGame =
+      game;
 
 
-  // ------------------------------
-  // GROOT SCHERM
-  // ------------------------------
+    // ----------------------------------------------
+    // GROOT SCHERM
+    // ----------------------------------------------
 
-  if (isDisplay) {
+    if (isDisplay) {
 
-    renderDisplay(game);
+      renderDisplay(
+        game
+      );
+
+    }
+
+
+    // ----------------------------------------------
+    // DEELNEMER
+    // ----------------------------------------------
+
+    if (
+      !isAdmin &&
+      !isDisplay
+    ) {
+
+      renderParticipant(
+        game
+      );
+
+    }
 
   }
-
-
-  // ------------------------------
-  // DEELNEMER
-  // ------------------------------
-
-  if (!isAdmin && !isDisplay) {
-
-    renderParticipant(game);
-
-  }
-
-});
+);
 
 
 // ==================================================
 // DEELNEMER
 // ==================================================
 
-function renderParticipant(game) {
+function renderParticipant(
+  game
+) {
 
   // Geen actieve ronde
   if (
@@ -181,17 +235,25 @@ function renderParticipant(game) {
     game.roundId;
 
   const startedAt =
-    Number(game.startedAt);
+    Number(
+      game.startedAt
+    );
 
   const duration =
-    Number(game.duration);
+    Number(
+      game.duration
+    );
 
 
   // Ongeldige game-data
   if (
     !roundId ||
-    !Number.isFinite(startedAt) ||
-    !Number.isFinite(duration)
+    !Number.isFinite(
+      startedAt
+    ) ||
+    !Number.isFinite(
+      duration
+    )
   ) {
 
     return;
@@ -204,7 +266,8 @@ function renderParticipant(game) {
   // ==================================================
 
   if (
-    currentRoundId !== roundId
+    currentRoundId !==
+    roundId
   ) {
 
     currentRoundId =
@@ -221,11 +284,12 @@ function renderParticipant(game) {
 
 
   // ==================================================
-  // TIMER AL VOORBIJ
+  // TIMER VOORBIJ
   // ==================================================
 
   if (
-    Date.now() >= endTime
+    Date.now() >=
+    endTime
   ) {
 
     closeParticipantForm();
@@ -255,7 +319,9 @@ function renderParticipant(game) {
 
 function prepareForNewRound() {
 
-  clearInterval(timerHandle);
+  clearInterval(
+    timerHandle
+  );
 
 
   // Naam blijft behouden!
@@ -264,15 +330,18 @@ function prepareForNewRound() {
   // Code leegmaken
   if ($("guess")) {
 
-    $("guess").value = "";
+    $("guess").value =
+      "";
 
   }
 
 
-  // Eventuele oude melding verwijderen
+  // Oude melding verwijderen
   if ($("joinMsg")) {
 
-    $("joinMsg").textContent = "";
+    $("joinMsg")
+      .textContent =
+      "";
 
   }
 
@@ -280,7 +349,8 @@ function prepareForNewRound() {
   // Knop opnieuw activeren
   if ($("joinBtn")) {
 
-    $("joinBtn").disabled = false;
+    $("joinBtn").disabled =
+      false;
 
   }
 
@@ -307,45 +377,51 @@ function startParticipantTimer(
   endTime
 ) {
 
-  clearInterval(timerHandle);
+  clearInterval(
+    timerHandle
+  );
 
 
-  const update = () => {
+  const update =
+    () => {
 
-    const remaining =
-      Math.max(
-        0,
-        endTime - Date.now()
-      );
-
-
-    const seconds =
-      Math.ceil(
-        remaining / 1000
-      );
+      const remaining =
+        Math.max(
+          0,
+          endTime -
+          Date.now()
+        );
 
 
-    if ($("joinMsg")) {
+      const seconds =
+        Math.ceil(
+          remaining /
+          1000
+        );
 
-      $("joinMsg").textContent =
-        `Nog ${seconds} seconden om mee te doen.`;
 
-    }
+      if ($("joinMsg")) {
+
+        $("joinMsg")
+          .textContent =
+          `Nog ${seconds} seconden om mee te doen.`;
+
+      }
 
 
-    if (
-      remaining <= 0
-    ) {
+      if (
+        remaining <= 0
+      ) {
 
-      clearInterval(
-        timerHandle
-      );
+        clearInterval(
+          timerHandle
+        );
 
-      closeParticipantForm();
+        closeParticipantForm();
 
-    }
+      }
 
-  };
+    };
 
 
   update();
@@ -397,7 +473,10 @@ function closeParticipantForm() {
 
 
     closed.innerHTML = `
-      <div class="lock">🔒</div>
+
+      <div class="lock">
+        🔒
+      </div>
 
       <h1>
         Inschrijving gesloten
@@ -410,12 +489,17 @@ function closeParticipantForm() {
       <p>
         Wacht op de uitslag op het grote scherm.
       </p>
+
     `;
 
 
     document
-      .getElementById("app")
-      .appendChild(closed);
+      .getElementById(
+        "app"
+      )
+      .appendChild(
+        closed
+      );
 
   }
 
@@ -447,13 +531,14 @@ $("joinBtn")?.addEventListener(
         .trim();
 
 
-    // ------------------------------
+    // ----------------------------------------------
     // NAAM
-    // ------------------------------
+    // ----------------------------------------------
 
     if (!name) {
 
-      $("joinMsg").textContent =
+      $("joinMsg")
+        .textContent =
         "Vul je naam in.";
 
       return;
@@ -461,9 +546,9 @@ $("joinBtn")?.addEventListener(
     }
 
 
-    // ------------------------------
+    // ----------------------------------------------
     // CODE
-    // ------------------------------
+    // ----------------------------------------------
 
     if (
       !/^\d{6}$/.test(
@@ -471,7 +556,8 @@ $("joinBtn")?.addEventListener(
       )
     ) {
 
-      $("joinMsg").textContent =
+      $("joinMsg")
+        .textContent =
         "Vul precies 6 cijfers in.";
 
       return;
@@ -479,11 +565,13 @@ $("joinBtn")?.addEventListener(
     }
 
 
-    $("joinBtn").disabled =
+    $("joinBtn")
+      .disabled =
       true;
 
 
-    $("joinMsg").textContent =
+    $("joinMsg")
+      .textContent =
       "Inzending controleren...";
 
 
@@ -501,7 +589,8 @@ $("joinBtn")?.addEventListener(
               gameRef,
               resolve,
               {
-                onlyOnce: true
+                onlyOnce:
+                  true
               }
             )
 
@@ -563,7 +652,8 @@ $("joinBtn")?.addEventListener(
 
       const endTime =
         startedAt +
-        duration * 1000;
+        duration *
+        1000;
 
 
       // ============================================
@@ -571,7 +661,8 @@ $("joinBtn")?.addEventListener(
       // ============================================
 
       if (
-        Date.now() >= endTime
+        Date.now() >=
+        endTime
       ) {
 
         throw new Error(
@@ -595,10 +686,13 @@ $("joinBtn")?.addEventListener(
         item,
         {
 
-          name: name,
+          name:
+            name,
 
           guess:
-            Number(guess),
+            Number(
+              guess
+            ),
 
           roundId:
             roundId,
@@ -642,7 +736,8 @@ $("joinBtn")?.addEventListener(
 
 
       $("joinBtn")
-        .disabled = false;
+        .disabled =
+        false;
 
 
       if (
@@ -770,21 +865,30 @@ $("startBtn")?.addEventListener(
 function createRoundId() {
 
   return (
+
     Date.now()
-    .toString(36)
+      .toString(36)
+
     +
+
     "-"
+
     +
+
     Math.random()
       .toString(36)
-      .substring(2, 10)
+      .substring(
+        2,
+        10
+      )
+
   );
 
 }
 
 
 // ==================================================
-// ADMIN — WINNAAR
+// ADMIN — WINNAAR + TOP 3
 // ==================================================
 
 $("revealBtn")?.addEventListener(
@@ -792,6 +896,10 @@ $("revealBtn")?.addEventListener(
   async () => {
 
     try {
+
+      // ============================================
+      // INZENDINGEN OPHALEN
+      // ============================================
 
       const snapshot =
         await new Promise(
@@ -801,7 +909,8 @@ $("revealBtn")?.addEventListener(
               entriesRef,
               resolve,
               {
-                onlyOnce: true
+                onlyOnce:
+                  true
               }
             )
 
@@ -812,18 +921,33 @@ $("revealBtn")?.addEventListener(
         snapshot.val() || {};
 
 
-      // --------------------------------------------
-      // ALLEEN INZENDINGEN VAN HUIDIGE RONDE
-      // --------------------------------------------
+      // ============================================
+      // ALLEEN HUIDIGE RONDE
+      // ============================================
 
       const entries =
-        Object.values(data)
-          .filter(
-            entry =>
-              entry.roundId ===
-              currentGame?.roundId
-          );
+        Object.entries(
+          data
+        )
+        .map(
+          ([id, entry]) => ({
 
+            id,
+
+            ...entry
+
+          })
+        )
+        .filter(
+          entry =>
+            entry.roundId ===
+            currentGame?.roundId
+        );
+
+
+      // ============================================
+      // GEEN DEELNEMERS
+      // ============================================
 
       if (
         !entries.length
@@ -838,9 +962,9 @@ $("revealBtn")?.addEventListener(
       }
 
 
-      // --------------------------------------------
-      // CODE
-      // --------------------------------------------
+      // ============================================
+      // 6-CIJFERIGE CODE
+      // ============================================
 
       const code =
         Math.floor(
@@ -849,51 +973,109 @@ $("revealBtn")?.addEventListener(
         );
 
 
-      let winner =
-        null;
+      // ============================================
+      // AFSTAND BEREKENEN
+      // ============================================
+
+      const rankedEntries =
+        entries
+          .map(
+            entry => {
+
+              const guess =
+                Number(
+                  entry.guess
+                );
 
 
-      // --------------------------------------------
-      // TOP 3 BEPALEN
-      // --------------------------------------------
-
-const rankedEntries =
-  entries
-    .map(entry => {
-
-      const guess =
-        Number(entry.guess);
-
-      const diff =
-        Math.abs(
-          guess - code
-        );
-
-      return {
-        name: entry.name,
-        guess: guess,
-        diff: diff
-      };
-
-    })
-    .sort(
-      (a, b) => a.diff - b.diff
-    );
+              const diff =
+                Math.abs(
+                  guess -
+                  code
+                );
 
 
-// Eerste deelnemer is de winnaar
-winner =
-  rankedEntries[0];
+              return {
+
+                id:
+                  entry.id,
+
+                name:
+                  entry.name,
+
+                guess:
+                  guess,
+
+                diff:
+                  diff
+
+              };
+
+            }
+          )
+          .sort(
+            (a, b) => {
+
+              // Eerst kleinste verschil
+              if (
+                a.diff !==
+                b.diff
+              ) {
+
+                return (
+                  a.diff -
+                  b.diff
+                );
+
+              }
 
 
-// De beste drie
-const top3 =
-  rankedEntries.slice(0, 3);
+              // Bij gelijk verschil:
+              // eerste inzending eerst
+              return (
+                Number(
+                  entries.find(
+                    e =>
+                      e.id ===
+                      a.id
+                  )?.createdAt
+                ) -
+                Number(
+                  entries.find(
+                    e =>
+                      e.id ===
+                      b.id
+                  )?.createdAt
+                )
+              );
+
+            }
+          );
 
 
-      // --------------------------------------------
+      // ============================================
+      // TOP 3
+      // ============================================
+
+      const top3 =
+        rankedEntries
+          .slice(
+            0,
+            3
+          );
+
+
+      // ============================================
+      // WINNAAR
+      // ============================================
+
+      const winner =
+        top3[0];
+
+
+      // ============================================
       // RESULTAAT OPSLAAN
-      // --------------------------------------------
+      // ============================================
 
       await set(
         gameRef,
@@ -909,7 +1091,10 @@ const top3 =
             code,
 
           winner:
-            winner
+            winner,
+
+          top3:
+            top3
 
         }
       );
@@ -917,7 +1102,12 @@ const top3 =
 
       $("adminStatus")
         .textContent =
-        `Code: ${String(code).padStart(6, "0")}`;
+        `Code: ${String(
+          code
+        ).padStart(
+          6,
+          "0"
+        )}`;
 
     }
 
@@ -1015,9 +1205,9 @@ function renderDisplay(
   }
 
 
-  // ----------------------------------------------
+  // ================================================
   // OPEN
-  // ----------------------------------------------
+  // ================================================
 
   if (
     game.status ===
@@ -1052,7 +1242,8 @@ function renderDisplay(
 
     const endTime =
       startedAt +
-      duration * 1000;
+      duration *
+      1000;
 
 
     $("displayText")
@@ -1074,9 +1265,9 @@ function renderDisplay(
   }
 
 
-  // ----------------------------------------------
-  // REVEALED
-  // ----------------------------------------------
+  // ================================================
+  // UITSLAG
+  // ================================================
 
   else if (
     game.status ===
@@ -1087,6 +1278,10 @@ function renderDisplay(
       timerHandle
     );
 
+
+    // ----------------------------------------------
+    // JUISTE CODE
+    // ----------------------------------------------
 
     $("timer")
       .textContent =
@@ -1110,20 +1305,149 @@ function renderDisplay(
       );
 
 
+    // ----------------------------------------------
+    // TOP 3
+    // ----------------------------------------------
+
     if (
+      game.top3 &&
+      game.top3.length
+    ) {
+
+      const medals = [
+        "🥇",
+        "🥈",
+        "🥉"
+      ];
+
+
+      const places = [
+        "GOUD",
+        "ZILVER",
+        "BRONS"
+      ];
+
+
+      $("result")
+        .innerHTML = `
+
+          <div class="winner-title">
+
+            🎉
+            ${escapeHtml(
+              game.top3[0].name
+            )}
+            WINT!
+            🎉
+
+          </div>
+
+
+          <div class="podium">
+
+            ${game.top3
+              .map(
+                (
+                  entry,
+                  index
+                ) => `
+
+                  <div
+                    class="podium-place"
+                  >
+
+                    <div
+                      class="medal"
+                    >
+                      ${
+                        medals[index]
+                      }
+                    </div>
+
+
+                    <div
+                      class="place"
+                    >
+                      ${
+                        places[index]
+                      }
+                    </div>
+
+
+                    <div
+                      class="player-name"
+                    >
+                      ${
+                        escapeHtml(
+                          entry.name
+                        )
+                      }
+                    </div>
+
+
+                    <div
+                      class="player-guess"
+                    >
+                      ${
+                        String(
+                          entry.guess
+                        ).padStart(
+                          6,
+                          "0"
+                        )
+                      }
+                    </div>
+
+
+                    <div
+                      class="difference"
+                    >
+                      Verschil:
+                      ${
+                        entry.diff
+                      }
+                    </div>
+
+                  </div>
+
+                `
+              )
+              .join("")}
+
+          </div>
+
+        `;
+
+
+      confetti();
+
+    }
+
+
+    // ----------------------------------------------
+    // OUDE WINNAAR-DATA
+    // ----------------------------------------------
+
+    else if (
       game.winner
     ) {
 
       $("result")
         .innerHTML = `
-          🎉 ${escapeHtml(
+
+          🎉
+          ${escapeHtml(
             game.winner.name
-          )} WINT! 🎉
+          )}
+          WINT!
+          🎉
 
           <br>
 
           <small>
+
             Gok:
+
             ${String(
               game.winner.guess
             ).padStart(
@@ -1131,9 +1455,14 @@ function renderDisplay(
               "0"
             )}
 
-            · Verschil:
+            ·
+
+            Verschil:
+
             ${game.winner.diff}
+
           </small>
+
         `;
 
 
@@ -1144,9 +1473,9 @@ function renderDisplay(
   }
 
 
-  // ----------------------------------------------
+  // ================================================
   // IDLE
-  // ----------------------------------------------
+  // ================================================
 
   else {
 
@@ -1190,41 +1519,42 @@ function startDisplayTimer(
   );
 
 
-  const tick = () => {
+  const tick =
+    () => {
 
-    const left =
-      Math.max(
-        0,
-        Math.ceil(
-          (
-            endTime -
-            Date.now()
-          ) / 1000
-        )
-      );
-
-
-    $("timer")
-      .textContent =
-      left;
+      const left =
+        Math.max(
+          0,
+          Math.ceil(
+            (
+              endTime -
+              Date.now()
+            ) / 1000
+          )
+        );
 
 
-    if (
-      left <= 0
-    ) {
-
-      clearInterval(
-        timerHandle
-      );
-
-
-      $("displayText")
+      $("timer")
         .textContent =
-        "🔒 INSCHRIJVING GESLOTEN";
+        left;
 
-    }
 
-  };
+      if (
+        left <= 0
+      ) {
+
+        clearInterval(
+          timerHandle
+        );
+
+
+        $("displayText")
+          .textContent =
+          "🔒 INSCHRIJVING GESLOTEN";
+
+      }
+
+    };
 
 
   tick();
@@ -1238,6 +1568,7 @@ function startDisplayTimer(
 
 }
 
+
 // ==================================================
 // INZENDINGEN
 // ==================================================
@@ -1250,69 +1581,90 @@ onValue(
       return;
     }
 
+
     const data =
       snapshot.val() || {};
 
-    // We gebruiken Object.entries zodat iedere
-    // Firebase-inzending zijn eigen unieke key behoudt.
+
+    // Object.entries zorgt ervoor dat
+    // iedere Firebase-inzending afzonderlijk
+    // behouden blijft.
+
     const entries =
-      Object.entries(data)
-        .map(([id, entry]) => ({
+      Object.entries(
+        data
+      )
+      .map(
+        ([id, entry]) => ({
+
           id,
+
           ...entry
-        }))
-        .filter(
-          entry =>
-            entry.roundId ===
-            currentGame?.roundId
-        );
+
+        })
+      );
 
 
+    // Alleen huidige ronde
+    const currentEntries =
+      entries.filter(
+        entry =>
+          entry.roundId ===
+          currentGame?.roundId
+      );
+
+
+    // ============================================
     // AANTAL DEELNEMERS
-    $("entriesCount").textContent =
-      `${entries.length} deelnemer${
-        entries.length === 1
+    // ============================================
+
+    $("entriesCount")
+      .textContent =
+      `${currentEntries.length} deelnemer${
+        currentEntries.length === 1
           ? ""
           : "s"
       } hebben meegedaan`;
 
 
+    // ============================================
     // OVERZICHT
-    $("entries").innerHTML =
-      entries
+    // ============================================
+
+    $("entries")
+      .innerHTML =
+      currentEntries
         .map(
-          entry => {
+          entry => `
 
-            const guess =
-              String(
-                entry.guess
-              ).padStart(
-                6,
-                "0"
-              );
+            <div
+              class="entry"
+            >
 
-            return `
-              <div class="entry">
+              ${escapeHtml(
+                entry.name
+              )}
 
-                ${escapeHtml(
-                  entry.name
+              —
+
+              <b>
+                ${String(
+                  entry.guess
+                ).padStart(
+                  6,
+                  "0"
                 )}
+              </b>
 
-                —
+            </div>
 
-                <b>
-                  ${guess}
-                </b>
-
-              </div>
-            `;
-
-          }
+          `
         )
         .join("");
 
   }
 );
+
 
 // ==================================================
 // HTML VEILIG MAKEN
