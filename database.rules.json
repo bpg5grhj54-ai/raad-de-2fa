@@ -1,0 +1,13 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    "entries": {
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.hasChildren(['name','guess','createdAt']) && newData.child('name').isString() && newData.child('name').val().length <= 30 && newData.child('guess').isNumber() && newData.child('guess').val() >= 0 && newData.child('guess').val() <= 999999"
+      }
+    },
+    "game": {
+      ".write": "auth != null && auth.uid == 'VUL_HIER_JOUW_ADMIN_UID_IN'"
+    }
+  }
+}
