@@ -1,30 +1,19 @@
 // ============================================================
-// RAAD DE 2FA
-// Volledige app.js
+// RAAD DE 2FA - VOLLEDIGE APP.JS
+// ============================================================
 //
-// Pagina's:
-// normaal                     = telefoon
-// ?admin=1                    = spelbesturing
-// ?screen=display             = groot scherm
+// Gewone URL:
+// https://.../raad-de-2fa/
 //
-// Behoudt:
-// - Firebase
-// - anonieme login
-// - unieke roundId
-// - nieuwe telefoons tijdens actieve ronde
-// - timer
-// - inzendingen na timer blokkeren
-// - dubbele codes toestaan
-// - Top 3
-// - winnaar
-// - confetti
+// Admin:
+// https://.../raad-de-2fa/?admin=1
+//
+// Groot scherm:
+// https://.../raad-de-2fa/?screen=display
+//
 // ============================================================
 
-
-import {
-  initializeApp
-} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 
 import {
   getDatabase,
@@ -35,130 +24,82 @@ import {
   remove
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
 
-
 import {
   getAuth,
   signInAnonymously,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 
-
-import {
-  firebaseConfig
-} from "./firebase-config.js";
+import { firebaseConfig } from "./firebase-config.js";
 
 
 // ============================================================
 // FIREBASE
 // ============================================================
 
-const app =
-  initializeApp(
-    firebaseConfig
-  );
+const app = initializeApp(firebaseConfig);
 
+const db = getDatabase(app);
+const auth = getAuth(app);
 
-const db =
-  getDatabase(
-    app
-  );
-
-
-const auth =
-  getAuth(
-    app
-  );
-
-
-const gameRef =
-  ref(
-    db,
-    "game"
-  );
-
-
-const entriesRef =
-  ref(
-    db,
-    "entries"
-  );
+const gameRef = ref(db, "game");
+const entriesRef = ref(db, "entries");
 
 
 // ============================================================
-// HULPFUNCTIE
+// ELEMENT HELPER
 // ============================================================
 
-const $ =
-  id =>
-    document.getElementById(
-      id
-    );
+const $ = (id) => document.getElementById(id);
 
 
 // ============================================================
-// URL MODUS
+// URL / SCHERM-MODUS
 // ============================================================
 
-const params =
-  new URLSearchParams(
-    window.location.search
-  );
-
+const params = new URLSearchParams(window.location.search);
 
 const isAdmin =
   params.get("admin") === "1";
-
 
 const isDisplay =
   params.get("screen") === "display";
 
 
 // ============================================================
-// PAGINA'S
-// ============================================================
-//
-// We gebruiken hier bewust inline display-stijlen.
-// Daardoor zijn we niet afhankelijk van een .hidden CSS-class.
+// SCHERMEN
 // ============================================================
 
 function show(id) {
 
-  const element =
-    $(id);
+  const element = $(id);
 
-  if (!element) {
-    return;
+  if (element) {
+    element.classList.remove("hidden");
   }
-
-  element.style.display =
-    "";
 
 }
 
 
 function hide(id) {
 
-  const element =
-    $(id);
+  const element = $(id);
 
-  if (!element) {
-    return;
+  if (element) {
+    element.classList.add("hidden");
   }
-
-  element.style.display =
-    "none";
 
 }
 
 
-// Eerst alles verbergen
+// Eerst ALLE schermen verbergen
 hide("join");
 hide("waiting");
-hide("admin");
 hide("display");
+hide("admin");
 
 
-// Daarna exact één modus tonen
+// Daarna precies het juiste scherm tonen
 if (isDisplay) {
 
   show("display");
@@ -177,32 +118,44 @@ else {
 
 
 // ============================================================
-// AUTHENTICATIE
+// VARIABELEN
 // ============================================================
 
-let currentUid =
-  null;
+let currentUid = null;
 
+let currentGame = null;
+
+let currentRoundId = null;
+
+let timerHandle = null;
+
+let latestEntries = [];
+
+let lastDisplayedRound = null;
+
+let confettiShownForRound = null;
+
+
+// ============================================================
+// FIREBASE AUTH
+// ============================================================
 
 onAuthStateChanged(
   auth,
-  user => {
+  (user) => {
 
     if (!user) {
       return;
     }
 
-    currentUid =
-      user.uid;
-
+    currentUid = user.uid;
 
     if (
       isAdmin &&
       $("adminUid")
     ) {
 
-      $("adminUid")
-        .textContent =
+      $("adminUid").textContent =
         "Jouw admin-ID: " +
         currentUid;
 
@@ -212,113 +165,68 @@ onAuthStateChanged(
 );
 
 
-signInAnonymously(
-  auth
-)
-.catch(
-  error => {
+signInAnonymously(auth)
+  .catch((error) => {
 
     console.error(
       "Firebase login fout:",
       error
     );
 
-    if (
-      isAdmin &&
-      $("adminStatus")
-    ) {
+    if (isAdmin) {
 
-      $("adminStatus")
-        .textContent =
+      setAdminStatus(
         "Firebase login fout: " +
-        getErrorMessage(
-          error
-        );
+        getErrorMessage(error)
+      );
 
     }
 
-  }
-);
+  });
 
 
 // ============================================================
-// LOKALE STATUS
-// ============================================================
-
-let currentRoundId =
-  null;
-
-
-let currentGame =
-  null;
-
-
-let timerHandle =
-  null;
-
-
-let latestEntries =
-  [];
-
-
-// ============================================================
-// FIREBASE GAME VOLGEN
+// GAME LISTENER
 // ============================================================
 
 onValue(
   gameRef,
-  snapshot => {
+  (snapshot) => {
 
     const game =
-      snapshot.val() ||
-      {};
+      snapshot.val() || null;
 
-    currentGame =
-      game;
+    currentGame = game;
 
 
-    // ----------------------------------------
-    // GROOT SCHERM
-    // ----------------------------------------
-
+    // Groot scherm
     if (isDisplay) {
 
-      renderDisplay(
-        game
-      );
+      renderDisplay(game);
 
     }
 
 
-    // ----------------------------------------
-    // TELEFOON
-    // ----------------------------------------
+    // Mobiele telefoon
+    else if (!isAdmin) {
 
-    if (
-      !isAdmin &&
-      !isDisplay
-    ) {
-
-      renderParticipant(
-        game
-      );
+      renderParticipant(game);
 
     }
 
   },
-  error => {
+  (error) => {
 
     console.error(
       "Game listener fout:",
       error
     );
 
-
     if (isAdmin) {
 
-      showAdminError(
-        "Firebase leesfout: ",
-        error
+      setAdminStatus(
+        "Firebase leesfout: " +
+        getErrorMessage(error)
       );
 
     }
@@ -328,12 +236,90 @@ onValue(
 
 
 // ============================================================
-// TELEFOON — GAME WEERGEVEN
+// ENTRIES LISTENER
 // ============================================================
 
-function renderParticipant(
-  game
-) {
+onValue(
+  entriesRef,
+  (snapshot) => {
+
+    const data =
+      snapshot.val() || {};
+
+
+    latestEntries =
+      Object.entries(data)
+        .map(
+          ([id, entry]) => ({
+            id,
+            ...entry
+          })
+        );
+
+
+    if (!isDisplay) {
+      return;
+    }
+
+
+    const roundEntries =
+      latestEntries.filter(
+        (entry) =>
+          entry.roundId ===
+          currentGame?.roundId
+      );
+
+
+    // Aantal deelnemers
+    if ($("entriesCount")) {
+
+      $("entriesCount").textContent =
+        `${roundEntries.length} deelnemer${
+          roundEntries.length === 1
+            ? ""
+            : "s"
+        }`;
+
+    }
+
+
+    // Deelnemerslijst
+    if ($("entries")) {
+
+      $("entries").innerHTML =
+        roundEntries
+          .map(
+            (entry) => `
+              <div class="entry">
+                ${escapeHtml(entry.name)}
+                —
+                <b>
+                  ${formatCode(entry.guess)}
+                </b>
+              </div>
+            `
+          )
+          .join("");
+
+    }
+
+  },
+  (error) => {
+
+    console.error(
+      "Entries listener fout:",
+      error
+    );
+
+  }
+);
+
+
+// ============================================================
+// MOBIELE PAGINA
+// ============================================================
+
+function renderParticipant(game) {
 
   // Geen actieve ronde
   if (
@@ -341,7 +327,15 @@ function renderParticipant(
     game.status !== "open"
   ) {
 
-    closeParticipantForm();
+    if (
+      game &&
+      game.status === "revealed"
+    ) {
+
+      hide("join");
+      hide("waiting");
+
+    }
 
     return;
 
@@ -351,28 +345,17 @@ function renderParticipant(
   const roundId =
     game.roundId;
 
-
   const startedAt =
-    Number(
-      game.startedAt
-    );
-
+    Number(game.startedAt);
 
   const duration =
-    Number(
-      game.duration
-    );
+    Number(game.duration);
 
 
-  // Ongeldige game
   if (
     !roundId ||
-    !Number.isFinite(
-      startedAt
-    ) ||
-    !Number.isFinite(
-      duration
-    )
+    !Number.isFinite(startedAt) ||
+    !Number.isFinite(duration)
   ) {
 
     return;
@@ -380,36 +363,27 @@ function renderParticipant(
   }
 
 
-  // ----------------------------------------
-  // NIEUWE RONDE
-  // ----------------------------------------
-
+  // Nieuwe ronde
   if (
-    currentRoundId !==
-    roundId
+    currentRoundId !== roundId
   ) {
 
     currentRoundId =
       roundId;
 
-    prepareForNewRound();
+    resetParticipantForNewRound();
 
   }
 
 
   const endTime =
     startedAt +
-    duration *
-    1000;
+    duration * 1000;
 
 
-  // ----------------------------------------
-  // TIJD VOORBIJ
-  // ----------------------------------------
-
+  // Timer verlopen
   if (
-    Date.now() >=
-    endTime
+    Date.now() >= endTime
   ) {
 
     closeParticipantForm();
@@ -419,11 +393,8 @@ function renderParticipant(
   }
 
 
-  show("join");
-
   hide("waiting");
-
-  hide("closedMessage");
+  show("join");
 
 
   startParticipantTimer(
@@ -434,71 +405,709 @@ function renderParticipant(
 
 
 // ============================================================
-// TELEFOON — NIEUWE RONDE
+// NIEUWE RONDE OP TELEFOON
 // ============================================================
 
-function prepareForNewRound() {
+function resetParticipantForNewRound() {
 
-  clearInterval(
-    timerHandle
-  );
+  clearInterval(timerHandle);
 
 
-  // Naam blijft behouden.
+  // Naam NIET wissen
+  // Code WEL wissen
 
-
-  // Alleen de code wissen
   if ($("guess")) {
 
-    $("guess").value =
-      "";
+    $("guess").value = "";
 
   }
 
 
-  // Oude foutmelding wissen
   if ($("joinMsg")) {
 
-    $("joinMsg")
-      .textContent =
-      "";
+    $("joinMsg").textContent = "";
 
   }
 
 
-  // Knop weer actief
   if ($("joinBtn")) {
 
-    $("joinBtn")
-      .disabled =
-      false;
+    $("joinBtn").disabled = false;
 
   }
 
 
-  // Oude schermen weg
   hide("waiting");
 
-  hide("closedMessage");
-
-
-  // Invoer tonen
   show("join");
 
 }
 
 
 // ============================================================
-// TELEFOON — TIMER
+// TELEFOON TIMER
 // ============================================================
 
-function startParticipantTimer(
-  endTime
-) {
+function startParticipantTimer(endTime) {
 
-  clearInterval(
-    timerHandle
-  );
+  clearInterval(timerHandle);
+
+
+  function updateTimer() {
+
+    const remaining =
+      Math.max(
+        0,
+        endTime - Date.now()
+      );
+
+
+    const seconds =
+      Math.ceil(
+        remaining / 1000
+      );
+
+
+    if ($("joinMsg")) {
+
+      $("joinMsg").textContent =
+        `Nog ${seconds} seconden om mee te doen.`;
+
+    }
+
+
+    if (remaining <= 0) {
+
+      clearInterval(timerHandle);
+
+      closeParticipantForm();
+
+    }
+
+  }
+
+
+  updateTimer();
+
+
+  timerHandle =
+    setInterval(
+      updateTimer,
+      200
+    );
+
+}
+
+
+// ============================================================
+// INSCHRIJVING SLUITEN
+// ============================================================
+
+function closeParticipantForm() {
+
+  clearInterval(timerHandle);
+
+  hide("join");
+
+  hide("waiting");
+
+}
+
+
+// ============================================================
+// MEEDOEN
+// ============================================================
+
+$("joinBtn")?.addEventListener(
+  "click",
+  async () => {
+
+    const name =
+      $("name")?.value.trim() || "";
+
+    const guess =
+      $("guess")?.value.trim() || "";
+
+
+    // Naam controleren
+    if (!name) {
+
+      $("joinMsg").textContent =
+        "Vul je naam in.";
+
+      return;
+
+    }
+
+
+    // Code controleren
+    if (!/^\d{6}$/.test(guess)) {
+
+      $("joinMsg").textContent =
+        "Vul precies 6 cijfers in.";
+
+      return;
+
+    }
+
+
+    $("joinBtn").disabled = true;
+
+    $("joinMsg").textContent =
+      "Inzending controleren...";
+
+
+    try {
+
+      // Huidige game opnieuw controleren
+      const gameSnapshot =
+        await getOnce(gameRef);
+
+      const game =
+        gameSnapshot.val();
+
+
+      if (
+        !game ||
+        game.status !== "open"
+      ) {
+
+        throw new Error(
+          "De inschrijving is gesloten."
+        );
+
+      }
+
+
+      const roundId =
+        game.roundId;
+
+      const startedAt =
+        Number(game.startedAt);
+
+      const duration =
+        Number(game.duration);
+
+
+      const endTime =
+        startedAt +
+        duration * 1000;
+
+
+      // Timer controleren
+      if (
+        Date.now() >= endTime
+      ) {
+
+        throw new Error(
+          "De inschrijving is gesloten."
+        );
+
+      }
+
+
+      // Nieuwe unieke entry
+      // Hierdoor mogen meerdere spelers
+      // exact dezelfde code kiezen.
+      const entryRef =
+        push(entriesRef);
+
+
+      await set(
+        entryRef,
+        {
+          name: name,
+          guess: Number(guess),
+          roundId: roundId,
+          createdAt: Date.now()
+        }
+      );
+
+
+      // Gelukt
+      hide("join");
+
+      if ($("savedGuess")) {
+
+        $("savedGuess").textContent =
+          `${name}, jouw gok is ${formatCode(guess)}.`;
+
+      }
+
+      show("waiting");
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "Inzending mislukt:",
+        error
+      );
+
+
+      $("joinBtn").disabled =
+        false;
+
+
+      $("joinMsg").textContent =
+        getErrorMessage(error);
+
+    }
+
+  }
+);
+
+
+// ============================================================
+// ADMIN - START RONDE
+// ============================================================
+
+$("startBtn")?.addEventListener(
+  "click",
+  async () => {
+
+    const duration =
+      Math.max(
+        5,
+        Math.min(
+          300,
+          Number(
+            $("duration")?.value
+          ) || 30
+        )
+      );
+
+
+    setAdminStatus(
+      "Ronde wordt gestart..."
+    );
+
+
+    try {
+
+      // Oude inzendingen wissen
+      await remove(entriesRef);
+
+
+      // Uniek ronde-ID
+      const roundId =
+        createRoundId();
+
+
+      // Nieuwe game
+      await set(
+        gameRef,
+        {
+          status: "open",
+          roundId: roundId,
+          duration: duration,
+          startedAt: Date.now()
+        }
+      );
+
+
+      setAdminStatus(
+        `Ronde gestart voor ${duration} seconden.`
+      );
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "START RONDE fout:",
+        error
+      );
+
+
+      setAdminStatus(
+        "Fout bij starten van de ronde: " +
+        getErrorMessage(error)
+      );
+
+    }
+
+  }
+);
+
+
+// ============================================================
+// ADMIN - TOON CODE & WINNAAR
+// ============================================================
+
+$("revealBtn")?.addEventListener(
+  "click",
+  async () => {
+
+    setAdminStatus(
+      "Uitslag wordt berekend..."
+    );
+
+
+    try {
+
+      if (
+        !currentGame ||
+        !currentGame.roundId
+      ) {
+
+        throw new Error(
+          "Er is geen actieve ronde."
+        );
+
+      }
+
+
+      // Alle inzendingen ophalen
+      const snapshot =
+        await getOnce(entriesRef);
+
+      const data =
+        snapshot.val() || {};
+
+
+      // Alleen huidige ronde
+      const entries =
+        Object.entries(data)
+          .map(
+            ([id, entry]) => ({
+              id,
+              ...entry
+            })
+          )
+          .filter(
+            (entry) =>
+              entry.roundId ===
+              currentGame.roundId
+          );
+
+
+      if (!entries.length) {
+
+        throw new Error(
+          "Er zijn nog geen deelnemers."
+        );
+
+      }
+
+
+      // Willekeurige 6-cijferige code
+      const code =
+        Math.floor(
+          Math.random() * 1000000
+        );
+
+
+      // Ranking
+      const ranked =
+        entries
+          .map(
+            (entry) => {
+
+              const guess =
+                Number(entry.guess);
+
+              const diff =
+                Math.abs(
+                  guess - code
+                );
+
+
+              return {
+                id: entry.id,
+                name: entry.name,
+                guess: guess,
+                diff: diff,
+                createdAt:
+                  Number(entry.createdAt) || 0
+              };
+
+            }
+          )
+          .sort(
+            (a, b) => {
+
+              // Kleinste afstand eerst
+              if (
+                a.diff !== b.diff
+              ) {
+
+                return (
+                  a.diff - b.diff
+                );
+
+              }
+
+              // Bij gelijke afstand:
+              // wie eerder inzond wint
+              return (
+                a.createdAt -
+                b.createdAt
+              );
+
+            }
+          );
+
+
+      const top3 =
+        ranked.slice(0, 3);
+
+
+      const winner =
+        top3[0];
+
+
+      // Uitslag opslaan
+      await set(
+        gameRef,
+        {
+          status: "revealed",
+          roundId: currentGame.roundId,
+          code: code,
+          winner: winner,
+          top3: top3
+        }
+      );
+
+
+      setAdminStatus(
+        `Code: ${formatCode(code)}`
+      );
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "TOON CODE fout:",
+        error
+      );
+
+
+      setAdminStatus(
+        "Fout bij tonen van winnaar: " +
+        getErrorMessage(error)
+      );
+
+    }
+
+  }
+);
+
+
+// ============================================================
+// ADMIN - NIEUWE RONDE
+// ============================================================
+
+$("resetBtn")?.addEventListener(
+  "click",
+  async () => {
+
+    setAdminStatus(
+      "Nieuwe ronde wordt klaargezet..."
+    );
+
+
+    try {
+
+      // Inzendingen verwijderen
+      await remove(entriesRef);
+
+
+      // Game terug naar idle
+      await set(
+        gameRef,
+        {
+          status: "idle",
+          roundId: null,
+          duration:
+            Number(
+              $("duration")?.value
+            ) || 30
+        }
+      );
+
+
+      setAdminStatus(
+        "Nieuwe ronde klaar."
+      );
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "NIEUWE RONDE fout:",
+        error
+      );
+
+
+      setAdminStatus(
+        "Fout bij nieuwe ronde: " +
+        getErrorMessage(error)
+      );
+
+    }
+
+  }
+);
+
+
+// ============================================================
+// GROOT SCHERM
+// ============================================================
+
+function renderDisplay(game) {
+
+  if (!game) {
+
+    showDisplayWaiting();
+
+    return;
+
+  }
+
+
+  // ----------------------------------------------------------
+  // RONDE OPEN
+  // ----------------------------------------------------------
+
+  if (
+    game.status === "open"
+  ) {
+
+    const startedAt =
+      Number(game.startedAt);
+
+    const duration =
+      Number(game.duration);
+
+
+    if (
+      !Number.isFinite(startedAt) ||
+      !Number.isFinite(duration)
+    ) {
+
+      return;
+
+    }
+
+
+    if ($("displayText")) {
+
+      $("displayText").textContent =
+        "Vul je gok in op je telefoon!";
+
+    }
+
+
+    if ($("result")) {
+
+      $("result").classList.add(
+        "hidden"
+      );
+
+    }
+
+
+    startDisplayTimer(
+      startedAt +
+      duration * 1000
+    );
+
+
+    return;
+
+  }
+
+
+  // ----------------------------------------------------------
+  // UITSLAG
+  // ----------------------------------------------------------
+
+  if (
+    game.status === "revealed"
+  ) {
+
+    clearInterval(timerHandle);
+
+
+    if ($("timer")) {
+
+      $("timer").textContent =
+        formatCode(game.code);
+
+    }
+
+
+    if ($("displayText")) {
+
+      $("displayText").textContent =
+        "DE 2FA-CODE IS...";
+
+    }
+
+
+    showResult(game);
+
+    return;
+
+  }
+
+
+  // ----------------------------------------------------------
+  // IDLE
+  // ----------------------------------------------------------
+
+  showDisplayWaiting();
+
+}
+
+
+// ============================================================
+// GROOT SCHERM - WACHTSCHERM
+// ============================================================
+
+function showDisplayWaiting() {
+
+  clearInterval(timerHandle);
+
+
+  if ($("timer")) {
+
+    $("timer").textContent =
+      "30";
+
+  }
+
+
+  if ($("displayText")) {
+
+    $("displayText").textContent =
+      "Doe mee via je telefoon!";
+
+  }
+
+
+  if ($("result")) {
+
+    $("result").classList.add(
+      "hidden"
+    );
+
+  }
+
+}
+
+
+// ============================================================
+// GROOT SCHERM - TIMER
+// ============================================================
+
+function startDisplayTimer(endTime) {
+
+  clearInterval(timerHandle);
 
 
   function update() {
@@ -506,36 +1115,34 @@ function startParticipantTimer(
     const remaining =
       Math.max(
         0,
-        endTime -
-        Date.now()
+        endTime - Date.now()
       );
 
 
     const seconds =
       Math.ceil(
-        remaining /
-        1000
+        remaining / 1000
       );
 
 
-    if ($("joinMsg")) {
+    if ($("timer")) {
 
-      $("joinMsg")
-        .textContent =
-        `Nog ${seconds} seconden om mee te doen.`;
+      $("timer").textContent =
+        seconds;
 
     }
 
 
-    if (
-      remaining <= 0
-    ) {
+    if (remaining <= 0) {
 
-      clearInterval(
-        timerHandle
-      );
+      clearInterval(timerHandle);
 
-      closeParticipantForm();
+      if ($("displayText")) {
+
+        $("displayText").textContent =
+          "🔒 INSCHRIJVING GESLOTEN";
+
+      }
 
     }
 
@@ -555,439 +1162,269 @@ function startParticipantTimer(
 
 
 // ============================================================
-// TELEFOON — INSCHRIJVING SLUITEN
+// UITSLAG OP GROOT SCHERM
 // ============================================================
 
-function closeParticipantForm() {
+function showResult(game) {
 
-  clearInterval(
-    timerHandle
-  );
-
-
-  hide("join");
-
-  hide("waiting");
+  if (!$("result")) {
+    return;
+  }
 
 
-  let closed =
-    $("closedMessage");
+  let top3 =
+    Array.isArray(game.top3)
+      ? game.top3
+      : [];
 
 
-  if (!closed) {
+  // Fallback voor het geval top3 niet
+  // in Firebase aanwezig is
+  if (
+    top3.length === 0 &&
+    latestEntries.length > 0
+  ) {
 
-    closed =
-      document.createElement(
-        "section"
-      );
+    top3 =
+      latestEntries
+        .filter(
+          (entry) =>
+            entry.roundId ===
+            game.roundId
+        )
+        .map(
+          (entry) => {
 
+            const guess =
+              Number(entry.guess);
 
-    closed.id =
-      "closedMessage";
+            return {
+              id: entry.id,
+              name: entry.name,
+              guess: guess,
+              diff:
+                Math.abs(
+                  guess -
+                  Number(game.code)
+                ),
+              createdAt:
+                Number(entry.createdAt) || 0
+            };
 
+          }
+        )
+        .sort(
+          (a, b) => {
 
-    closed.className =
-      "card";
+            if (
+              a.diff !== b.diff
+            ) {
 
+              return (
+                a.diff - b.diff
+              );
 
-    closed.innerHTML = `
+            }
 
-      <div class="lock">
-        🔒
-      </div>
+            return (
+              a.createdAt -
+              b.createdAt
+            );
 
-      <h1>
-        Inschrijving gesloten
-      </h1>
-
-      <p class="subtitle">
-        De tijd is voorbij!
-      </p>
-
-      <p>
-        Wacht op de uitslag op het grote scherm.
-      </p>
-
-    `;
-
-
-    const appElement =
-      $("app");
-
-
-    if (appElement) {
-
-      appElement.appendChild(
-        closed
-      );
-
-    }
+          }
+        )
+        .slice(0, 3);
 
   }
 
 
-  show(
-    "closedMessage"
+  if (!top3.length) {
+
+    $("result").innerHTML = `
+      <div style="
+        text-align:center;
+        font-size:2rem;
+        font-weight:900;
+      ">
+        Geen deelnemers.
+      </div>
+    `;
+
+    $("result").classList.remove(
+      "hidden"
+    );
+
+    return;
+
+  }
+
+
+  const medals = [
+    "🥇",
+    "🥈",
+    "🥉"
+  ];
+
+
+  const places = [
+    "1e PLAATS",
+    "2e PLAATS",
+    "3e PLAATS"
+  ];
+
+
+  const winner =
+    top3[0];
+
+
+  $("result").innerHTML = `
+
+    <div style="
+      text-align:center;
+      margin-bottom:25px;
+    ">
+
+      <div style="
+        font-size:clamp(2rem,5vw,4rem);
+        font-weight:900;
+      ">
+
+        🎉
+        ${escapeHtml(winner.name)}
+        WINT!
+        🎉
+
+      </div>
+
+    </div>
+
+
+    <div style="
+      display:flex;
+      justify-content:center;
+      align-items:stretch;
+      gap:18px;
+      flex-wrap:wrap;
+      width:100%;
+    ">
+
+      ${top3
+        .map(
+          (entry, index) => `
+
+            <div style="
+              flex:1 1 220px;
+              max-width:320px;
+              min-width:210px;
+              padding:22px;
+              border-radius:22px;
+              background:rgba(255,255,255,.10);
+              border:2px solid rgba(255,255,255,.20);
+              text-align:center;
+              box-sizing:border-box;
+            ">
+
+              <div style="
+                font-size:clamp(2.5rem,6vw,4.5rem);
+                line-height:1;
+              ">
+
+                ${medals[index]}
+
+              </div>
+
+
+              <div style="
+                font-size:1.2rem;
+                font-weight:900;
+                margin-top:10px;
+              ">
+
+                ${places[index]}
+
+              </div>
+
+
+              <div style="
+                font-size:clamp(1.4rem,3vw,2.3rem);
+                font-weight:900;
+                margin-top:12px;
+              ">
+
+                ${escapeHtml(entry.name)}
+
+              </div>
+
+
+              <div style="
+                font-size:1.4rem;
+                font-weight:800;
+                margin-top:8px;
+              ">
+
+                ${formatCode(entry.guess)}
+
+              </div>
+
+
+              <div style="
+                margin-top:8px;
+                opacity:.85;
+              ">
+
+                Verschil:
+                <strong>
+                  ${entry.diff}
+                </strong>
+
+              </div>
+
+            </div>
+
+          `
+        )
+        .join("")}
+
+    </div>
+
+  `;
+
+
+  $("result").classList.remove(
+    "hidden"
   );
+
+
+  // Confetti maar één keer per ronde
+  if (
+    confettiShownForRound !==
+    game.roundId
+  ) {
+
+    confettiShownForRound =
+      game.roundId;
+
+    confetti();
+
+  }
 
 }
 
 
 // ============================================================
-// TELEFOON — MEEDOEN
+// ADMIN STATUS
 // ============================================================
 
-$("joinBtn")?.addEventListener(
-  "click",
-  async () => {
+function setAdminStatus(message) {
 
-    const name =
-      $("name")
-        ?.value
-        ?.trim() ||
-      "";
+  if ($("adminStatus")) {
 
-
-    const guess =
-      $("guess")
-        ?.value
-        ?.trim() ||
-      "";
-
-
-    // ----------------------------------------
-    // NAAM
-    // ----------------------------------------
-
-    if (!name) {
-
-      $("joinMsg")
-        .textContent =
-        "Vul je naam in.";
-
-      return;
-
-    }
-
-
-    // ----------------------------------------
-    // CODE
-    // ----------------------------------------
-
-    if (
-      !/^\d{6}$/.test(
-        guess
-      )
-    ) {
-
-      $("joinMsg")
-        .textContent =
-        "Vul precies 6 cijfers in.";
-
-      return;
-
-    }
-
-
-    $("joinBtn")
-      .disabled =
-      true;
-
-
-    $("joinMsg")
-      .textContent =
-      "Inzending controleren...";
-
-
-    try {
-
-      // --------------------------------------
-      // ACTUELE GAME OPHALEN
-      // --------------------------------------
-
-      const snapshot =
-        await getOnce(
-          gameRef
-        );
-
-
-      const game =
-        snapshot.val();
-
-
-      // --------------------------------------
-      // CONTROLEREN
-      // --------------------------------------
-
-      if (
-        !game ||
-        game.status !== "open"
-      ) {
-
-        throw new Error(
-          "ROUND_CLOSED"
-        );
-
-      }
-
-
-      const roundId =
-        game.roundId;
-
-
-      const startedAt =
-        Number(
-          game.startedAt
-        );
-
-
-      const duration =
-        Number(
-          game.duration
-        );
-
-
-      if (
-        !roundId ||
-        !Number.isFinite(
-          startedAt
-        ) ||
-        !Number.isFinite(
-          duration
-        )
-      ) {
-
-        throw new Error(
-          "INVALID_GAME"
-        );
-
-      }
-
-
-      const endTime =
-        startedAt +
-        duration *
-        1000;
-
-
-      // --------------------------------------
-      // TIMER CONTROLEREN
-      // --------------------------------------
-
-      if (
-        Date.now() >=
-        endTime
-      ) {
-
-        throw new Error(
-          "ROUND_CLOSED"
-        );
-
-      }
-
-
-      // --------------------------------------
-      // INZENDING OPSLAAN
-      //
-      // push() zorgt ervoor dat twee spelers
-      // met dezelfde code tóch twee aparte
-      // deelnemers zijn.
-      // --------------------------------------
-
-      const item =
-        push(
-          entriesRef
-        );
-
-
-      await set(
-        item,
-        {
-
-          name:
-            name,
-
-          guess:
-            Number(
-              guess
-            ),
-
-          roundId:
-            roundId,
-
-          createdAt:
-            Date.now()
-
-        }
-      );
-
-
-      // --------------------------------------
-      // GELUKT
-      // --------------------------------------
-
-      hide("join");
-
-      hide("closedMessage");
-
-
-      if ($("savedGuess")) {
-
-        $("savedGuess")
-          .textContent =
-          `${name}, jouw gok is ${guess}.`;
-
-      }
-
-
-      show("waiting");
-
-    }
-
-
-    catch (error) {
-
-      console.error(
-        "Inzending mislukt:",
-        error
-      );
-
-
-      if ($("joinBtn")) {
-
-        $("joinBtn")
-          .disabled =
-          false;
-
-      }
-
-
-      if (
-        error.message ===
-        "ROUND_CLOSED"
-      ) {
-
-        closeParticipantForm();
-
-      }
-      else {
-
-        $("joinMsg")
-          .textContent =
-          "Er ging iets mis: " +
-          getErrorMessage(
-            error
-          );
-
-      }
-
-    }
+    $("adminStatus").textContent =
+      message;
 
   }
-);
 
-
-// ============================================================
-// ADMIN — START RONDE
-// ============================================================
-
-$("startBtn")?.addEventListener(
-  "click",
-  async () => {
-
-    const duration =
-      Math.max(
-        5,
-        Math.min(
-          300,
-          Number(
-            $("duration")
-              ?.value
-          ) || 30
-        )
-      );
-
-
-    setAdminStatus(
-      "Ronde wordt gestart..."
-    );
-
-
-    try {
-
-      // --------------------------------------
-      // OUDE INZENDINGEN WISSEN
-      // --------------------------------------
-
-      await remove(
-        entriesRef
-      );
-
-
-      // --------------------------------------
-      // UNIEK RONDE-ID
-      // --------------------------------------
-
-      const roundId =
-        createRoundId();
-
-
-      // --------------------------------------
-      // STARTTIJD
-      // --------------------------------------
-
-      const startedAt =
-        Date.now();
-
-
-      // --------------------------------------
-      // NIEUWE RONDE OPSLAAN
-      // --------------------------------------
-
-      await set(
-        gameRef,
-        {
-
-          status:
-            "open",
-
-          roundId:
-            roundId,
-
-          duration:
-            duration,
-
-          startedAt:
-            startedAt
-
-        }
-      );
-
-
-      setAdminStatus(
-        `Ronde gestart voor ${duration} seconden.`
-      );
-
-    }
-
-
-    catch (error) {
-
-      console.error(
-        "START RONDE fout:",
-        error
-      );
-
-
-      showAdminError(
-        "Fout bij starten van de ronde: ",
-        error
-      );
-
-    }
-
-  }
-);
+}
 
 
 // ============================================================
@@ -997,1081 +1434,31 @@ $("startBtn")?.addEventListener(
 function createRoundId() {
 
   return (
-    Date.now()
-      .toString(36)
-
-    +
-    "-"
-
-    +
+    Date.now().toString(36) +
+    "-" +
     Math.random()
       .toString(36)
-      .substring(
-        2,
-        10
-      )
+      .substring(2, 10)
   );
 
 }
 
 
 // ============================================================
-// ADMIN — TOON CODE & WINNAAR
+// FIREBASE: ÉÉN KEER OPHALEN
 // ============================================================
 
-$("revealBtn")?.addEventListener(
-  "click",
-  async () => {
-
-    setAdminStatus(
-      "Uitslag wordt berekend..."
-    );
-
-
-    try {
-
-      // --------------------------------------
-      // HUIDIGE GAME CONTROLEREN
-      // --------------------------------------
-
-      if (
-        !currentGame ||
-        !currentGame.roundId
-      ) {
-
-        throw new Error(
-          "Er is geen actieve ronde."
-        );
-
-      }
-
-
-      // --------------------------------------
-      // INZENDINGEN OPHALEN
-      // --------------------------------------
-
-      const snapshot =
-        await getOnce(
-          entriesRef
-        );
-
-
-      const data =
-        snapshot.val() ||
-        {};
-
-
-      // --------------------------------------
-      // ALLEEN HUIDIGE RONDE
-      // --------------------------------------
-
-      const entries =
-        Object.entries(
-          data
-        )
-        .map(
-          ([id, entry]) => ({
-
-            id,
-
-            ...entry
-
-          })
-        )
-        .filter(
-          entry =>
-            entry.roundId ===
-            currentGame.roundId
-        );
-
-
-      // --------------------------------------
-      // GEEN DEELNEMERS
-      // --------------------------------------
-
-      if (
-        !entries.length
-      ) {
-
-        setAdminStatus(
-          "Er zijn nog geen deelnemers."
-        );
-
-        return;
-
-      }
-
-
-      // --------------------------------------
-      // 6-CIJFERIGE CODE
-      // --------------------------------------
-
-      const code =
-        Math.floor(
-          Math.random() *
-          1000000
-        );
-
-
-      // --------------------------------------
-      // RANKING MAKEN
-      // --------------------------------------
-
-      const rankedEntries =
-        entries
-          .map(
-            entry => {
-
-              const guess =
-                Number(
-                  entry.guess
-                );
-
-
-              const diff =
-                Math.abs(
-                  guess -
-                  code
-                );
-
-
-              return {
-
-                id:
-                  entry.id,
-
-                name:
-                  entry.name,
-
-                guess:
-                  guess,
-
-                diff:
-                  diff,
-
-                createdAt:
-                  Number(
-                    entry.createdAt
-                  ) || 0
-
-              };
-
-            }
-          )
-          .sort(
-            (a, b) => {
-
-              // Kleinste verschil eerst
-              if (
-                a.diff !==
-                b.diff
-              ) {
-
-                return (
-                  a.diff -
-                  b.diff
-                );
-
-              }
-
-
-              // Bij gelijk verschil:
-              // eerste inzending wint
-              return (
-                a.createdAt -
-                b.createdAt
-              );
-
-            }
-          );
-
-
-      // --------------------------------------
-      // TOP 3
-      // --------------------------------------
-
-      const top3 =
-        rankedEntries
-          .slice(
-            0,
-            3
-          );
-
-
-      const winner =
-        top3[0];
-
-
-      // --------------------------------------
-      // RESULTAAT OPSLAAN
-      // --------------------------------------
-
-      await set(
-        gameRef,
-        {
-
-          status:
-            "revealed",
-
-          roundId:
-            currentGame.roundId,
-
-          code:
-            code,
-
-          winner:
-            winner,
-
-          top3:
-            top3
-
-        }
-      );
-
-
-      setAdminStatus(
-        `Code: ${String(
-          code
-        ).padStart(
-          6,
-          "0"
-        )}`
-      );
-
-    }
-
-
-    catch (error) {
-
-      console.error(
-        "TOON CODE fout:",
-        error
-      );
-
-
-      showAdminError(
-        "Fout bij tonen van de winnaar: ",
-        error
-      );
-
-    }
-
-  }
-);
-
-
-// ============================================================
-// ADMIN — NIEUWE RONDE
-// ============================================================
-
-$("resetBtn")?.addEventListener(
-  "click",
-  async () => {
-
-    setAdminStatus(
-      "Nieuwe ronde wordt klaargezet..."
-    );
-
-
-    try {
-
-      // --------------------------------------
-      // INZENDINGEN WISSEN
-      // --------------------------------------
-
-      await remove(
-        entriesRef
-      );
-
-
-      // --------------------------------------
-      // GAME RESETTEN
-      // --------------------------------------
-
-      await set(
-        gameRef,
-        {
-
-          status:
-            "idle",
-
-          roundId:
-            null,
-
-          duration:
-            Number(
-              $("duration")
-                ?.value
-            ) || 30
-
-        }
-      );
-
-
-      setAdminStatus(
-        "Nieuwe ronde klaar."
-      );
-
-    }
-
-
-    catch (error) {
-
-      console.error(
-        "NIEUWE RONDE fout:",
-        error
-      );
-
-
-      showAdminError(
-        "Fout bij nieuwe ronde: ",
-        error
-      );
-
-    }
-
-  }
-);
-
-
-// ============================================================
-// GROOT SCHERM
-// ============================================================
-
-function renderDisplay(
-  game
-) {
-
-  if (
-    !game ||
-    !game.status
-  ) {
-
-    return;
-
-  }
-
-
-  // ----------------------------------------
-  // OPEN
-  // ----------------------------------------
-
-  if (
-    game.status ===
-    "open"
-  ) {
-
-    const startedAt =
-      Number(
-        game.startedAt
-      );
-
-
-    const duration =
-      Number(
-        game.duration
-      );
-
-
-    if (
-      !Number.isFinite(
-        startedAt
-      ) ||
-      !Number.isFinite(
-        duration
-      )
-    ) {
-
-      return;
-
-    }
-
-
-    const endTime =
-      startedAt +
-      duration *
-      1000;
-
-
-    if ($("displayText")) {
-
-      $("displayText")
-        .textContent =
-        "Vul je gok in op je telefoon!";
-
-    }
-
-
-    if ($("result")) {
-
-      $("result")
-        .classList
-        .add(
-          "hidden"
-        );
-
-    }
-
-
-    startDisplayTimer(
-      endTime
-    );
-
-    return;
-
-  }
-
-
-  // ----------------------------------------
-  // UITSLAG
-  // ----------------------------------------
-
-  if (
-    game.status ===
-    "revealed"
-  ) {
-
-    clearInterval(
-      timerHandle
-    );
-
-
-    if ($("timer")) {
-
-      $("timer")
-        .textContent =
-        String(
-          game.code
-        ).padStart(
-          6,
-          "0"
-        );
-
-    }
-
-
-    if ($("displayText")) {
-
-      $("displayText")
-        .textContent =
-        "DE 2FA-CODE IS...";
-
-    }
-
-
-    if ($("result")) {
-
-      $("result")
-        .classList
-        .remove(
-          "hidden"
-        );
-
-    }
-
-
-    // --------------------------------------
-    // TOP 3
-    // --------------------------------------
-
-    let top3 =
-      Array.isArray(
-        game.top3
-      )
-        ? game.top3
-        : [];
-
-
-    // --------------------------------------
-    // FALLBACK
-    //
-    // Als een oude ronde geen top3 heeft,
-    // berekenen we hem opnieuw uit Firebase.
-    // --------------------------------------
-
-    if (
-      top3.length === 0 &&
-      game.code !== undefined &&
-      latestEntries.length > 0
-    ) {
-
-      top3 =
-        latestEntries
-          .filter(
-            entry =>
-              entry.roundId ===
-              game.roundId
-          )
-          .map(
-            entry => {
-
-              const guess =
-                Number(
-                  entry.guess
-                );
-
-
-              return {
-
-                id:
-                  entry.id,
-
-                name:
-                  entry.name,
-
-                guess:
-                  guess,
-
-                diff:
-                  Math.abs(
-                    guess -
-                    Number(
-                      game.code
-                    )
-                  ),
-
-                createdAt:
-                  Number(
-                    entry.createdAt
-                  ) || 0
-
-              };
-
-            }
-          )
-          .sort(
-            (a, b) => {
-
-              if (
-                a.diff !==
-                b.diff
-              ) {
-
-                return (
-                  a.diff -
-                  b.diff
-                );
-
-              }
-
-
-              return (
-                a.createdAt -
-                b.createdAt
-              );
-
-            }
-          )
-          .slice(
-            0,
-            3
-          );
-
-    }
-
-
-    // --------------------------------------
-    // TOP 3 WEERGEVEN
-    // --------------------------------------
-
-    if (
-      top3.length > 0
-    ) {
-
-      const medals = [
-        "🥇",
-        "🥈",
-        "🥉"
-      ];
-
-
-      const places = [
-        "1e PLAATS — GOUD",
-        "2e PLAATS — ZILVER",
-        "3e PLAATS — BRONS"
-      ];
-
-
-      if ($("result")) {
-
-        $("result")
-          .innerHTML = `
-
-            <div
-              class="winner-title"
-              style="
-                font-size:clamp(2rem,4vw,4rem);
-                font-weight:900;
-                margin-bottom:24px;
-                text-align:center;
-              "
-            >
-
-              🎉
-              ${escapeHtml(
-                top3[0].name
-              )}
-              WINT!
-              🎉
-
-            </div>
-
-
-            <div
-              style="
-                display:flex;
-                justify-content:center;
-                align-items:flex-end;
-                gap:18px;
-                flex-wrap:wrap;
-                width:100%;
-                max-width:1100px;
-                margin:0 auto;
-              "
-            >
-
-              ${top3
-                .map(
-                  (
-                    entry,
-                    index
-                  ) => `
-
-                    <div
-                      style="
-                        background:rgba(255,255,255,.10);
-                        border:2px solid rgba(255,255,255,.20);
-                        border-radius:22px;
-                        padding:20px 24px;
-                        min-width:220px;
-                        flex:1 1 220px;
-                        max-width:320px;
-                        box-sizing:border-box;
-                        text-align:center;
-                      "
-                    >
-
-                      <div
-                        style="
-                          font-size:clamp(2.5rem,5vw,4.5rem);
-                          line-height:1;
-                          margin-bottom:8px;
-                        "
-                      >
-                        ${medals[index]}
-                      </div>
-
-
-                      <div
-                        style="
-                          font-size:clamp(1.1rem,2vw,1.6rem);
-                          font-weight:900;
-                          margin-bottom:10px;
-                        "
-                      >
-                        ${places[index]}
-                      </div>
-
-
-                      <div
-                        style="
-                          font-size:clamp(1.4rem,3vw,2.3rem);
-                          font-weight:900;
-                          margin-bottom:8px;
-                        "
-                      >
-                        ${escapeHtml(
-                          entry.name
-                        )}
-                      </div>
-
-
-                      <div
-                        style="
-                          font-size:clamp(1.2rem,2.5vw,2rem);
-                          font-weight:800;
-                          letter-spacing:2px;
-                          margin-bottom:8px;
-                        "
-                      >
-                        ${String(
-                          entry.guess
-                        ).padStart(
-                          6,
-                          "0"
-                        )}
-                      </div>
-
-
-                      <div
-                        style="
-                          font-size:1.1rem;
-                          opacity:.85;
-                        "
-                      >
-
-                        Verschil:
-
-                        <strong>
-                          ${entry.diff}
-                        </strong>
-
-                      </div>
-
-                    </div>
-
-                  `
-                )
-                .join("")}
-
-            </div>
-
-          `;
-
-      }
-
-
-      confetti();
-
-      return;
-
-    }
-
-
-    // --------------------------------------
-    // OUDE WINNAAR-DATA
-    // --------------------------------------
-
-    if (
-      game.winner
-    ) {
-
-      if ($("result")) {
-
-        $("result")
-          .innerHTML = `
-
-            <div
-              class="winner-title"
-              style="
-                font-size:clamp(2rem,4vw,4rem);
-                font-weight:900;
-                text-align:center;
-              "
-            >
-
-              🎉
-              ${escapeHtml(
-                game.winner.name
-              )}
-              WINT!
-              🎉
-
-            </div>
-
-
-            <br>
-
-
-            <small>
-
-              Gok:
-
-              ${String(
-                game.winner.guess
-              ).padStart(
-                6,
-                "0"
-              )}
-
-              ·
-
-              Verschil:
-
-              ${game.winner.diff}
-
-            </small>
-
-          `;
-
-      }
-
-
-      confetti();
-
-    }
-
-
-    return;
-
-  }
-
-
-  // ----------------------------------------
-  // IDLE
-  // ----------------------------------------
-
-  clearInterval(
-    timerHandle
-  );
-
-
-  if ($("timer")) {
-
-    $("timer")
-      .textContent =
-      game.duration ||
-      30;
-
-  }
-
-
-  if ($("displayText")) {
-
-    $("displayText")
-      .textContent =
-      "Doe mee via je telefoon!";
-
-  }
-
-
-  if ($("result")) {
-
-    $("result")
-      .classList
-      .add(
-        "hidden"
-      );
-
-  }
-
-}
-
-
-// ============================================================
-// GROOT SCHERM — TIMER
-// ============================================================
-
-function startDisplayTimer(
-  endTime
-) {
-
-  clearInterval(
-    timerHandle
-  );
-
-
-  function tick() {
-
-    const left =
-      Math.max(
-        0,
-        Math.ceil(
-          (
-            endTime -
-            Date.now()
-          ) /
-          1000
-        )
-      );
-
-
-    if ($("timer")) {
-
-      $("timer")
-        .textContent =
-        left;
-
-    }
-
-
-    if (
-      left <= 0
-    ) {
-
-      clearInterval(
-        timerHandle
-      );
-
-
-      if ($("displayText")) {
-
-        $("displayText")
-          .textContent =
-          "🔒 INSCHRIJVING GESLOTEN";
-
-      }
-
-    }
-
-  }
-
-
-  tick();
-
-
-  timerHandle =
-    setInterval(
-      tick,
-      200
-    );
-
-}
-
-
-// ============================================================
-// INZENDINGEN VOLGEN
-// ============================================================
-
-onValue(
-  entriesRef,
-  snapshot => {
-
-    const data =
-      snapshot.val() ||
-      {};
-
-
-    const entries =
-      Object.entries(
-        data
-      )
-      .map(
-        ([id, entry]) => ({
-
-          id,
-
-          ...entry
-
-        })
-      );
-
-
-    latestEntries =
-      entries;
-
-
-    // Alleen voor groot scherm
-    if (!isDisplay) {
-      return;
-    }
-
-
-    const currentEntries =
-      entries.filter(
-        entry =>
-          entry.roundId ===
-          currentGame?.roundId
-      );
-
-
-    // ----------------------------------------
-    // AANTAL
-    // ----------------------------------------
-
-    if ($("entriesCount")) {
-
-      $("entriesCount")
-        .textContent =
-        `${currentEntries.length} deelnemer${
-          currentEntries.length === 1
-            ? ""
-            : "s"
-        } hebben meegedaan`;
-
-    }
-
-
-    // ----------------------------------------
-    // OVERZICHT
-    // ----------------------------------------
-
-    if ($("entries")) {
-
-      $("entries")
-        .innerHTML =
-        currentEntries
-          .map(
-            entry => `
-
-              <div
-                class="entry"
-              >
-
-                ${escapeHtml(
-                  entry.name
-                )}
-
-                —
-
-                <b>
-
-                  ${String(
-                    entry.guess
-                  ).padStart(
-                    6,
-                    "0"
-                  )}
-
-                </b>
-
-              </div>
-
-            `
-          )
-          .join("");
-
-    }
-
-
-    // Als de uitslag al zichtbaar is,
-    // opnieuw tekenen zodat de fallback
-    // Top 3 meteen beschikbaar is.
-
-    if (
-      currentGame?.status ===
-      "revealed"
-    ) {
-
-      renderDisplay(
-        currentGame
-      );
-
-    }
-
-  },
-  error => {
-
-    console.error(
-      "Entries listener fout:",
-      error
-    );
-
-  }
-);
-
-
-// ============================================================
-// FIREBASE ONCE
-// ============================================================
-
-function getOnce(
-  databaseRef
-) {
+function getOnce(databaseRef) {
 
   return new Promise(
-    (
-      resolve,
-      reject
-    ) => {
+    (resolve, reject) => {
 
       onValue(
         databaseRef,
         resolve,
         reject,
         {
-          onlyOnce:
-            true
+          onlyOnce: true
         }
       );
 
@@ -2082,131 +1469,51 @@ function getOnce(
 
 
 // ============================================================
-// ADMIN STATUS
+// CODE FORMATTEREN
 // ============================================================
 
-function setAdminStatus(
-  message
-) {
+function formatCode(value) {
 
-  if ($("adminStatus")) {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ""
+  ) {
 
-    $("adminStatus")
-      .textContent =
-      message;
+    return "000000";
 
   }
+
+
+  return String(value)
+    .padStart(6, "0");
 
 }
 
 
 // ============================================================
-// ADMIN FOUT
+// HTML VEILIG WEERGEVEN
 // ============================================================
 
-function showAdminError(
-  prefix,
-  error
-) {
+function escapeHtml(value) {
 
-  const message =
-    getErrorMessage(
-      error
+  return String(value)
+    .replace(
+      /[&<>"']/g,
+      (character) => {
+
+        const entities = {
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#039;"
+        };
+
+        return entities[character];
+
+      }
     );
-
-
-  setAdminStatus(
-    prefix +
-    message
-  );
-
-}
-
-
-// ============================================================
-// FOUTMELDING
-// ============================================================
-
-function getErrorMessage(
-  error
-) {
-
-  if (!error) {
-
-    return "Onbekende fout.";
-
-  }
-
-
-  if (
-    error.code &&
-    error.message
-  ) {
-
-    return (
-      error.code +
-      " — " +
-      error.message
-    );
-
-  }
-
-
-  if (
-    error.message
-  ) {
-
-    return error.message;
-
-  }
-
-
-  if (
-    typeof error ===
-    "string"
-  ) {
-
-    return error;
-
-  }
-
-
-  return "Onbekende fout.";
-
-}
-
-
-// ============================================================
-// HTML VEILIG MAKEN
-// ============================================================
-
-function escapeHtml(
-  value
-) {
-
-  return String(
-    value
-  ).replace(
-    /[&<>"']/g,
-    char => ({
-
-      "&":
-        "&amp;",
-
-      "<":
-        "&lt;",
-
-      ">":
-        "&gt;",
-
-      '"':
-        "&quot;",
-
-      "'":
-        "&#039;"
-
-    }[char])
-  );
 
 }
 
@@ -2223,85 +1530,73 @@ function confetti() {
     i++
   ) {
 
-    const el =
-      document.createElement(
-        "div"
-      );
+    const element =
+      document.createElement("div");
 
 
-    el.textContent =
-      [
-        "🎉",
-        "✨",
-        "🎊",
-        "⭐"
-      ][
+    const symbols = [
+      "🎉",
+      "✨",
+      "🎊",
+      "⭐"
+    ];
+
+
+    element.textContent =
+      symbols[
         Math.floor(
           Math.random() *
-          4
+          symbols.length
         )
       ];
 
 
-    el.style.position =
+    element.style.position =
       "fixed";
 
-
-    el.style.left =
-      Math.random() *
-      100 +
+    element.style.left =
+      Math.random() * 100 +
       "vw";
 
-
-    el.style.top =
+    element.style.top =
       "-40px";
 
-
-    el.style.fontSize =
+    element.style.fontSize =
       18 +
-      Math.random() *
-      28 +
+      Math.random() * 28 +
       "px";
 
-
-    el.style.zIndex =
+    element.style.zIndex =
       "9999";
 
-
-    el.style.pointerEvents =
+    element.style.pointerEvents =
       "none";
 
-
-    el.style.transition =
-      `transform ${
+    element.style.transition =
+      `top ${
         2 +
-        Math.random() *
-        2
+        Math.random() * 2
       }s linear,
-      top ${
+      transform ${
         2 +
-        Math.random() *
-        2
+        Math.random() * 2
       }s linear`;
 
 
     document.body.appendChild(
-      el
+      element
     );
 
 
     requestAnimationFrame(
       () => {
 
-        el.style.top =
+        element.style.top =
           "110vh";
 
-
-        el.style.transform =
+        element.style.transform =
           `rotate(${
-            Math.random() *
-            900 -
-            450
+            Math.random() * 900 - 450
           }deg)`;
 
       }
@@ -2311,7 +1606,7 @@ function confetti() {
     setTimeout(
       () => {
 
-        el.remove();
+        element.remove();
 
       },
       4500
