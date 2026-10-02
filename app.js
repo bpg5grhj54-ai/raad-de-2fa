@@ -57,7 +57,9 @@ const $ = (id) => document.getElementById(id);
 // URL / SCHERM-MODUS
 // ============================================================
 
-const params = new URLSearchParams(window.location.search);
+const params = new URLSearchParams(
+  window.location.search
+);
 
 const isAdmin =
   params.get("admin") === "1";
@@ -92,7 +94,7 @@ function hide(id) {
 }
 
 
-// Eerst ALLE schermen verbergen
+// Bij het openen eerst alles verbergen
 hide("join");
 hide("waiting");
 hide("display");
@@ -131,8 +133,6 @@ let timerHandle = null;
 
 let latestEntries = [];
 
-let lastDisplayedRound = null;
-
 let confettiShownForRound = null;
 
 
@@ -166,23 +166,25 @@ onAuthStateChanged(
 
 
 signInAnonymously(auth)
-  .catch((error) => {
+  .catch(
+    (error) => {
 
-    console.error(
-      "Firebase login fout:",
-      error
-    );
-
-    if (isAdmin) {
-
-      setAdminStatus(
-        "Firebase login fout: " +
-        getErrorMessage(error)
+      console.error(
+        "Firebase login fout:",
+        error
       );
 
-    }
+      if (isAdmin) {
 
-  });
+        setAdminStatus(
+          "Firebase login fout: " +
+          getErrorMessage(error)
+        );
+
+      }
+
+    }
+  );
 
 
 // ============================================================
@@ -321,85 +323,140 @@ onValue(
 
 function renderParticipant(game) {
 
-  // Geen actieve ronde
-  if (
-    !game ||
-    game.status !== "open"
-  ) {
+  // ----------------------------------------------------------
+  // GEEN GAME
+  // ----------------------------------------------------------
 
-    if (
-      game &&
-      game.status === "revealed"
-    ) {
-
-      hide("join");
-      hide("waiting");
-
-    }
+  if (!game) {
 
     return;
 
   }
 
 
-  const roundId =
-    game.roundId;
-
-  const startedAt =
-    Number(game.startedAt);
-
-  const duration =
-    Number(game.duration);
-
+  // ----------------------------------------------------------
+  // NIEUWE RONDE
+  // ----------------------------------------------------------
 
   if (
-    !roundId ||
-    !Number.isFinite(startedAt) ||
-    !Number.isFinite(duration)
-  ) {
-
-    return;
-
-  }
-
-
-  // Nieuwe ronde
-  if (
-    currentRoundId !== roundId
+    game.roundId &&
+    currentRoundId !== game.roundId
   ) {
 
     currentRoundId =
-      roundId;
+      game.roundId;
 
     resetParticipantForNewRound();
 
   }
 
 
-  const endTime =
-    startedAt +
-    duration * 1000;
+  // ----------------------------------------------------------
+  // OPEN RONDE
+  // ----------------------------------------------------------
 
-
-  // Timer verlopen
   if (
-    Date.now() >= endTime
+    game.status === "open"
   ) {
 
-    closeParticipantForm();
+    const startedAt =
+      Number(game.startedAt);
+
+    const duration =
+      Number(game.duration);
+
+
+    if (
+      !game.roundId ||
+      !Number.isFinite(startedAt) ||
+      !Number.isFinite(duration)
+    ) {
+
+      return;
+
+    }
+
+
+    const endTime =
+      startedAt +
+      duration * 1000;
+
+
+    // Timer is al afgelopen
+    if (
+      Date.now() >= endTime
+    ) {
+
+      closeParticipantForm();
+
+      return;
+
+    }
+
+
+    // Invoer weer beschikbaar
+    show("join");
+
+    hide("waiting");
+
+
+    if ($("joinBtn")) {
+
+      $("joinBtn").disabled =
+        false;
+
+    }
+
+
+    if ($("guess")) {
+
+      $("guess").disabled =
+        false;
+
+    }
+
+
+    startParticipantTimer(
+      endTime
+    );
+
 
     return;
 
   }
 
 
-  hide("waiting");
-  show("join");
+  // ----------------------------------------------------------
+  // UITSLAG
+  // ----------------------------------------------------------
+
+  if (
+    game.status === "revealed"
+  ) {
+
+    clearInterval(timerHandle);
+
+    // Niets meer veranderen aan de
+    // telefoon. De melding blijft staan.
+
+    return;
+
+  }
 
 
-  startParticipantTimer(
-    endTime
-  );
+  // ----------------------------------------------------------
+  // IDLE
+  // ----------------------------------------------------------
+
+  if (
+    game.status === "idle"
+  ) {
+
+    clearInterval(timerHandle);
+
+    return;
+
+  }
 
 }
 
@@ -413,15 +470,30 @@ function resetParticipantForNewRound() {
   clearInterval(timerHandle);
 
 
-  // Naam NIET wissen
-  // Code WEL wissen
+  // ----------------------------------------------------------
+  // NAAM BEHOUDEN
+  // ----------------------------------------------------------
+
+  // We wissen bewust NIET:
+  // $("name").value
+
+
+  // ----------------------------------------------------------
+  // CODE WISSEN
+  // ----------------------------------------------------------
 
   if ($("guess")) {
 
     $("guess").value = "";
 
+    $("guess").disabled = false;
+
   }
 
+
+  // ----------------------------------------------------------
+  // MELDING WISSEN
+  // ----------------------------------------------------------
 
   if ($("joinMsg")) {
 
@@ -430,6 +502,10 @@ function resetParticipantForNewRound() {
   }
 
 
+  // ----------------------------------------------------------
+  // KNOP RESETTEN
+  // ----------------------------------------------------------
+
   if ($("joinBtn")) {
 
     $("joinBtn").disabled = false;
@@ -437,7 +513,16 @@ function resetParticipantForNewRound() {
   }
 
 
+  // ----------------------------------------------------------
+  // WACHTSCHERM WEG
+  // ----------------------------------------------------------
+
   hide("waiting");
+
+
+  // ----------------------------------------------------------
+  // DEELNAMEFORMULIER TONEN
+  // ----------------------------------------------------------
 
   show("join");
 
@@ -507,9 +592,50 @@ function closeParticipantForm() {
 
   clearInterval(timerHandle);
 
-  hide("join");
+
+  // ----------------------------------------------------------
+  // FORMULIER BLIJFT ZICHTBAAR
+  // ----------------------------------------------------------
+
+  show("join");
 
   hide("waiting");
+
+
+  // ----------------------------------------------------------
+  // KNOP UITSCHAKELEN
+  // ----------------------------------------------------------
+
+  if ($("joinBtn")) {
+
+    $("joinBtn").disabled =
+      true;
+
+  }
+
+
+  // ----------------------------------------------------------
+  // CODEVELD UITSCHAKELEN
+  // ----------------------------------------------------------
+
+  if ($("guess")) {
+
+    $("guess").disabled =
+      true;
+
+  }
+
+
+  // ----------------------------------------------------------
+  // MELDING
+  // ----------------------------------------------------------
+
+  if ($("joinMsg")) {
+
+    $("joinMsg").textContent =
+      "🔒 De inschrijving is gesloten.";
+
+  }
 
 }
 
@@ -529,7 +655,10 @@ $("joinBtn")?.addEventListener(
       $("guess")?.value.trim() || "";
 
 
-    // Naam controleren
+    // --------------------------------------------------------
+    // NAAM
+    // --------------------------------------------------------
+
     if (!name) {
 
       $("joinMsg").textContent =
@@ -540,7 +669,10 @@ $("joinBtn")?.addEventListener(
     }
 
 
-    // Code controleren
+    // --------------------------------------------------------
+    // CODE
+    // --------------------------------------------------------
+
     if (!/^\d{6}$/.test(guess)) {
 
       $("joinMsg").textContent =
@@ -551,7 +683,9 @@ $("joinBtn")?.addEventListener(
     }
 
 
-    $("joinBtn").disabled = true;
+    $("joinBtn").disabled =
+      true;
+
 
     $("joinMsg").textContent =
       "Inzending controleren...";
@@ -559,7 +693,10 @@ $("joinBtn")?.addEventListener(
 
     try {
 
-      // Huidige game opnieuw controleren
+      // ------------------------------------------------------
+      // ACTUELE GAME OPHALEN
+      // ------------------------------------------------------
+
       const gameSnapshot =
         await getOnce(gameRef);
 
@@ -594,7 +731,10 @@ $("joinBtn")?.addEventListener(
         duration * 1000;
 
 
-      // Timer controleren
+      // ------------------------------------------------------
+      // TIMER CONTROLEREN
+      // ------------------------------------------------------
+
       if (
         Date.now() >= endTime
       ) {
@@ -606,9 +746,19 @@ $("joinBtn")?.addEventListener(
       }
 
 
-      // Nieuwe unieke entry
-      // Hierdoor mogen meerdere spelers
-      // exact dezelfde code kiezen.
+      // ------------------------------------------------------
+      // NIEUWE UNIEKE INZENDING
+      // ------------------------------------------------------
+      //
+      // push() zorgt ervoor dat:
+      //
+      // Martin -> 123456
+      // Piet   -> 123456
+      // Jan    -> 123456
+      //
+      // alle drie afzonderlijke deelnemers blijven.
+      //
+
       const entryRef =
         push(entriesRef);
 
@@ -624,8 +774,12 @@ $("joinBtn")?.addEventListener(
       );
 
 
-      // Gelukt
+      // ------------------------------------------------------
+      // GELUKT
+      // ------------------------------------------------------
+
       hide("join");
+
 
       if ($("savedGuess")) {
 
@@ -633,6 +787,7 @@ $("joinBtn")?.addEventListener(
           `${name}, jouw gok is ${formatCode(guess)}.`;
 
       }
+
 
       show("waiting");
 
@@ -686,16 +841,16 @@ $("startBtn")?.addEventListener(
 
     try {
 
-      // Oude inzendingen wissen
+      // Oude inzendingen verwijderen
       await remove(entriesRef);
 
 
-      // Uniek ronde-ID
+      // Nieuwe unieke ronde
       const roundId =
         createRoundId();
 
 
-      // Nieuwe game
+      // Nieuwe ronde opslaan
       await set(
         gameRef,
         {
@@ -759,7 +914,7 @@ $("revealBtn")?.addEventListener(
       }
 
 
-      // Alle inzendingen ophalen
+      // Inzendingen ophalen
       const snapshot =
         await getOnce(entriesRef);
 
@@ -792,14 +947,20 @@ $("revealBtn")?.addEventListener(
       }
 
 
-      // Willekeurige 6-cijferige code
+      // ------------------------------------------------------
+      // 6-CIJFERIGE CODE
+      // ------------------------------------------------------
+
       const code =
         Math.floor(
           Math.random() * 1000000
         );
 
 
-      // Ranking
+      // ------------------------------------------------------
+      // RANKING
+      // ------------------------------------------------------
+
       const ranked =
         entries
           .map(
@@ -839,8 +1000,9 @@ $("revealBtn")?.addEventListener(
 
               }
 
+
               // Bij gelijke afstand:
-              // wie eerder inzond wint
+              // eerste inzending wint
               return (
                 a.createdAt -
                 b.createdAt
@@ -850,15 +1012,22 @@ $("revealBtn")?.addEventListener(
           );
 
 
+      // Top 3
       const top3 =
-        ranked.slice(0, 3);
+        ranked.slice(
+          0,
+          3
+        );
 
 
       const winner =
         top3[0];
 
 
-      // Uitslag opslaan
+      // ------------------------------------------------------
+      // UITSLAG OPSLAAN
+      // ------------------------------------------------------
+
       await set(
         gameRef,
         {
@@ -911,11 +1080,11 @@ $("resetBtn")?.addEventListener(
 
     try {
 
-      // Inzendingen verwijderen
+      // Oude inzendingen verwijderen
       await remove(entriesRef);
 
 
-      // Game terug naar idle
+      // Game resetten
       await set(
         gameRef,
         {
@@ -970,7 +1139,7 @@ function renderDisplay(game) {
 
 
   // ----------------------------------------------------------
-  // RONDE OPEN
+  // OPEN RONDE
   // ----------------------------------------------------------
 
   if (
@@ -1137,6 +1306,7 @@ function startDisplayTimer(endTime) {
 
       clearInterval(timerHandle);
 
+
       if ($("displayText")) {
 
         $("displayText").textContent =
@@ -1178,8 +1348,10 @@ function showResult(game) {
       : [];
 
 
-  // Fallback voor het geval top3 niet
-  // in Firebase aanwezig is
+  // ----------------------------------------------------------
+  // FALLBACK TOP 3
+  // ----------------------------------------------------------
+
   if (
     top3.length === 0 &&
     latestEntries.length > 0
@@ -1233,7 +1405,10 @@ function showResult(game) {
 
           }
         )
-        .slice(0, 3);
+        .slice(
+          0,
+          3
+        );
 
   }
 
@@ -1259,6 +1434,10 @@ function showResult(game) {
   }
 
 
+  // ----------------------------------------------------------
+  // MEDAILLES
+  // ----------------------------------------------------------
+
   const medals = [
     "🥇",
     "🥈",
@@ -1276,6 +1455,10 @@ function showResult(game) {
   const winner =
     top3[0];
 
+
+  // ----------------------------------------------------------
+  // HTML TOP 3
+  // ----------------------------------------------------------
 
   $("result").innerHTML = `
 
@@ -1395,7 +1578,10 @@ function showResult(game) {
   );
 
 
-  // Confetti maar één keer per ronde
+  // ----------------------------------------------------------
+  // CONFETTI
+  // ----------------------------------------------------------
+
   if (
     confettiShownForRound !==
     game.roundId
@@ -1438,14 +1624,17 @@ function createRoundId() {
     "-" +
     Math.random()
       .toString(36)
-      .substring(2, 10)
+      .substring(
+        2,
+        10
+      )
   );
 
 }
 
 
 // ============================================================
-// FIREBASE: ÉÉN KEER OPHALEN
+// FIREBASE - ÉÉN KEER OPHALEN
 // ============================================================
 
 function getOnce(databaseRef) {
@@ -1486,13 +1675,16 @@ function formatCode(value) {
 
 
   return String(value)
-    .padStart(6, "0");
+    .padStart(
+      6,
+      "0"
+    );
 
 }
 
 
 // ============================================================
-// HTML VEILIG WEERGEVEN
+// HTML VEILIG MAKEN
 // ============================================================
 
 function escapeHtml(value) {
@@ -1531,7 +1723,9 @@ function confetti() {
   ) {
 
     const element =
-      document.createElement("div");
+      document.createElement(
+        "div"
+      );
 
 
     const symbols = [
@@ -1596,7 +1790,8 @@ function confetti() {
 
         element.style.transform =
           `rotate(${
-            Math.random() * 900 - 450
+            Math.random() * 900 -
+            450
           }deg)`;
 
       }
