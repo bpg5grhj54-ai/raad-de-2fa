@@ -847,20 +847,23 @@ $("startBtn")?.addEventListener(
     }
 
 
-    catch (error) {
+   catch (error) {
 
-      console.error(
-        error
-      );
+  console.error(
+    "START RONDE FOUT:",
+    error
+  );
 
+  $("adminStatus")
+    .textContent =
+    "FOUT: " +
+    (
+      error?.code ||
+      error?.message ||
+      "Onbekende fout"
+    );
 
-      $("adminStatus")
-        .textContent =
-        "Fout bij starten van de ronde.";
-
-    }
-
-  }
+}
 );
 
 
